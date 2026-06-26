@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Conch - Web3 3D Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fredoka:wght@400;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+
+<body>
+  <div id="app">
+    <div id="canvas-container" class="canvas-container">
+      <canvas id="webgl-canvas"></canvas>
+
+      <!-- Clickable Logo Icon & Brand Text Anchored to HUD -->
+      <div id="hud-brand-container" class="hud-brand-container hidden">
+        <button id="hud-icon-btn" class="hud-icon-btn" aria-label="HUD Logo Icon">
+          <img id="hud-icon-img" class="hud-icon-img" src="/icon%2050x50/0001.webp" alt="Logo Icon">
+        </button>
+        <span class="hud-logo-text-nak">$NAK</span>
+      </div>
+
+      <!-- Top HUD Banner with Wallet Connect -->
+      <div id="top-hud-bar" class="top-hud-bar hidden">
+        <div class="wallet-connect-wrapper">
+          <button id="wallet-connect-btn" class="wallet-connect-btn">Connect Wallet</button>
+          <div id="wallet-dropdown" class="wallet-dropdown hidden">
+            <div class="wallet-dropdown-header">Wallet Connect</div>
+            <div class="wallet-options">
+              <button class="wallet-option-btn" data-wallet="ii">
+                <span class="wallet-icon-emoji">♾️</span>
+                <span class="wallet-name">[ Internet Identity ]</span>
+              </button>
+              <button class="wallet-option-btn" data-wallet="plug">
+                <span class="wallet-icon-emoji">🔌</span>
+                <span class="wallet-name">[ Plug Wallet ]</span>
+              </button>
+              <button class="wallet-option-btn" data-wallet="bitfinity">
+                <span class="wallet-icon-emoji">🔮</span>
+                <span class="wallet-name">[ Bitfinity Wallet ]</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side Conch Oracle Card -->
+      <div id="ask-conch-overlay" class="ask-conch-overlay hidden">
+        <div id="ask-conch-card" class="conch-card">
+          <!-- Wavy spots for cartoon Spongebob look -->
+          <div class="card-spot spot-1"></div>
+          <div class="card-spot spot-2"></div>
+          <div class="card-spot spot-3"></div>
+          <div class="card-spot spot-4"></div>
+
+          <!-- STATE 1: Ask the Conch -->
+          <div id="card-state-ask" class="card-state-container">
+            <h2 class="card-title">ASK THE CONCH</h2>
+            <p class="card-subtitle">select your question</p>
+
+            <div class="scroll-container">
+              <div class="scroll-cap scroll-top"></div>
+              <div class="scroll-body">
+                <label class="question-option">
+                  <input type="radio" name="conch-question" value="q1">
+                  <span class="radio-custom"></span>
+                  <span class="question-text">Will my 8-year NNS stake make me generational wealth?</span>
+                </label>
+                <label class="question-option">
+                  <input type="radio" name="conch-question" value="q2">
+                  <span class="radio-custom"></span>
+                  <span class="question-text" id="question-random">Should I buy $EXE?</span>
+                </label>
+                <label class="question-option">
+                  <input type="radio" name="conch-question" value="q3">
+                  <span class="radio-custom"></span>
+                  <span class="question-text">Is the bull market back or am I being exit liquidity?</span>
+                </label>
+                <label class="question-option">
+                  <input type="radio" name="conch-question" value="q4">
+                  <span class="radio-custom"></span>
+                  <span class="question-text">Will DFINITY ever market ICP properly?</span>
+                </label>
+                <label class="question-option">
+                  <input type="radio" name="conch-question" value="q5">
+                  <span class="radio-custom"></span>
+                  <span class="question-text">Should I rage-tweet at Dom or keep holding?</span>
+                </label>
+              </div>
+              <div class="scroll-cap scroll-bottom"></div>
+            </div>
+
+            <button id="burn-btn" class="wood-btn" disabled>
+              <span class="wood-btn-text">BURN 0.01 iCP TO PROMPT</span>
+            </button>
+          </div>
+
+          <!-- STATE 2: Pull the Cord -->
+          <div id="card-state-pull" class="card-state-container hidden">
+            <h2 class="card-title">THE ORACLE SPEAKS</h2>
+            <p class="card-subtitle">The cord is ready</p>
+
+            <div class="pull-graphics-container">
+              <div class="pull-rope-graphic">🐚</div>
+            </div>
+
+            <button id="conch-pull-btn" class="wood-btn">
+              <span class="wood-btn-text">PULL THE CORD</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulated Wallet Signature Pop-up -->
+      <div id="wallet-signature-modal" class="wallet-modal-overlay hidden">
+        <div class="wallet-modal-content">
+          <div class="wallet-modal-header">
+            <div class="wallet-avatar">🔌</div>
+            <div>
+              <span class="wallet-modal-title">Plug Wallet</span>
+              <span class="wallet-modal-subtitle">Signature Request</span>
+            </div>
+          </div>
+          <div class="wallet-modal-body">
+            <div class="txn-detail-row">
+              <span class="detail-label">Action</span>
+              <span class="detail-value text-accent">Burn Cycles (Oracle Query)</span>
+            </div>
+            <div class="txn-detail-row">
+              <span class="detail-label">Amount</span>
+              <span class="detail-value font-bold">0.01 ICP</span>
+            </div>
+            <div class="txn-detail-row">
+              <span class="detail-label">Gas Fee</span>
+              <span class="detail-value">0.0001 ICP</span>
+            </div>
+            <div class="txn-detail-row">
+              <span class="detail-label">Canister ID</span>
+              <span class="detail-value font-mono">ryjl3-tyaaa-aaaaa-aaaba-cai</span>
+            </div>
+            <div class="signature-message-box">
+              <p class="msg-title">Message to sign:</p>
+              <p id="signature-message-text" class="msg-content font-mono">ask_oracle("Will my 8-year NNS stake make me
+                generational wealth?")</p>
+            </div>
+          </div>
+          <div class="wallet-modal-footer">
+            <button id="sig-reject-btn" class="modal-btn btn-secondary">Reject</button>
+            <button id="sig-approve-btn" class="modal-btn btn-primary">Approve</button>
+          </div>
+          <div id="sig-loader" class="sig-loader hidden">
+            <div class="spinner-ring-small"></div>
+            <span class="loader-text">Signing Transaction...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Full-screen Pre-loader -->
+    <div id="preloader" class="preloader">
+      <div class="preloader-content">
+        <div class="spinner-container">
+          <div class="spinner-core">🐚</div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-glow"></div>
+        </div>
+        <h1 class="preloader-title">NAK Portal</h1>
+        <p id="preloader-status" class="preloader-status">Initializing Portal...</p>
+        <div class="progress-bar-container">
+          <div id="preloader-progress" class="progress-bar" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unsupported/Unaccelerated Fallback screen -->
+    <div id="unsupported-fallback" class="fallback-screen hidden">
+      <div class="fallback-content">
+        <div class="fallback-icon">⚠️</div>
+        <h2>Hardware Acceleration Required</h2>
+        <p>This 3D experience requires hardware acceleration and WebGL/WebGPU support.</p>
+        <div class="fallback-steps">
+          <p><strong>To resolve this:</strong></p>
+          <ul>
+            <li>Ensure hardware acceleration is enabled in browser settings.</li>
+            <li>Update your graphics card drivers.</li>
+            <li>Use a modern, GPU-accelerated browser.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
