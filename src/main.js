@@ -235,6 +235,8 @@ const _originalMaterials = new Map(); // mesh → original material(s)
 
 // ---- Benchmarking & Calibration ----
 let isBenchmarking = false;
+let warmupFrameCount = -1;
+const WARMUP_FRAMES_LIMIT = 45; // ~1.5s at 30fps to let shaders compile and GPU driver cache warm up
 let benchmarkFrameCount = 0;
 const benchmarkFrameTimes = [];
 let lastFrameTime = 0;
@@ -972,12 +974,10 @@ function loadModel() {
       // Force pipeline creation & compilation by rendering a single frame hidden
       renderer.render(scene, activeCamera);
 
-      // Start benchmarking phase
-      setProgress(85, 'Calibrating Graphics...');
-      isBenchmarking = true;
-      benchmarkFrameCount = 0;
-      benchmarkFrameTimes.length = 0;
-      lastFrameTime = performance.now();
+      // Start warmup phase to let shaders compile and GPU caches settle
+      setProgress(85, 'Warming up graphics...');
+      warmupFrameCount = 0;
+      isBenchmarking = false;
 
       // Debug helpers
       window.scene = scene;
@@ -1428,7 +1428,7 @@ function animate() {
   // Render scene through the post-processing pipeline
   postProcessing.render();
 
-  // Benchmarking step
+  // Benchmarking & Warmup steps
   if (isBenchmarking) {
     const now = performance.now();
     const frameDuration = now - lastFrameTime;
@@ -1445,6 +1445,15 @@ function animate() {
     if (benchmarkFrameTimes.length >= 15) {
       isBenchmarking = false;
       finishBenchmarking();
+    }
+  } else if (warmupFrameCount !== -1) {
+    warmupFrameCount++;
+    if (warmupFrameCount >= WARMUP_FRAMES_LIMIT) {
+      warmupFrameCount = -1; // stop warmup
+      isBenchmarking = true;
+      benchmarkFrameCount = 0;
+      benchmarkFrameTimes.length = 0;
+      lastFrameTime = performance.now();
     }
   }
 }
