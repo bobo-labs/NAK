@@ -1,0 +1,247 @@
+# Walkthrough - UI & Layering Enhancements
+
+This document summarizes the recent updates made to resolve rendering issues and enhance the visual style of the application.
+
+---
+
+## 1. Fixing Conch Overlay Layering
+
+We solved the issue where the animated conch character was rendering behind the wooden HUD bar (`tabla_hud`) at the top of the viewport.
+
+### Cause of the Issue
+To prevent the **Depth of Field (DoF)** pass from blurring the HUD, `tabla_hud` was moved to **Layer 1** and rendered in an isolated HUD render pass, which is then overlaid on top of the main scene (Layer 0). 
+
+Because the conch character parts (shell, cord, arms, hands) remained only on Layer 0, `tabla_hud` was drawn over them in the final composite step, regardless of their actual 3D distance to the camera.
+
+### Changes Made
+In [src/main.js](file:///f:/NAK-MVP/src/main.js):
+1. **Conch Part Layer Settings**: We enabled **Layer 1** on all mesh objects belonging to the conch character (names including `conch`, `cord`, `cylinder`, `arm`, `body`, and `hand`). They are now active in both Layer 0 (for shadows/DoF) and Layer 1.
+2. **HUD Depth Testing**: In the HUD compositing pass, the conch character parts now render alongside `tabla_hud` on Layer 1. Standard depth testing naturally determines that the conch character is physically closer to the camera and renders it *over* the table.
+3. **Toon Outlines on HUD**: We wrapped `hudPassNode` in `toonOutlinePass` when outlines are enabled so the conch and table preserve their stylized borders in the HUD overlay.
+
+### Verification Results
+Below is the screenshot of the scene showing the conch overlapping in front of the top wood beam correctly:
+
+![Fixed Conch Overlay](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/initial_page_load_1782490423272.png)
+
+---
+
+## 2. Texturized Scrollbar Thumb & Track Inner Shadow on "Ask the Conch" Card
+
+We updated the scrollbar in the **Ask the Conch** card so that only the draggable handle (thumb) is wood-textured using a 90-degree rotated version of `Tabla.png` with custom scaling, while the track features a carved inner shadow that blends with the container background.
+
+### Changes Made
+In [src/style.css](file:///f:/NAK-MVP/src/style.css#L612-L635):
+1. **Scrollbar Track**:
+   - Re-introduced the inset shadow (`box-shadow: inset 2px 0 5px rgba(0, 0, 0, 0.4)`) to make the track look like a carved groove.
+   - Kept the track background color solid `#f6ebd2` (matching the parchment card background exactly) to prevent the WebKit rendering bug that causes vertical stripes.
+2. **Scrollbar Thumb**:
+   - Restored the custom background properties: `background-size: 1000% 200%`, `background-repeat: no-repeat`, `background-position: 25% 50%`, and `border: url('/Tabla_90.png')` to display the texture exactly as desired.
+
+---
+
+## 3. Simplified Square Parchment Text Container (Caps Removed)
+
+We removed the top and bottom rolled-up scroll caps from the **Ask the Conch** card, replacing them with a closed, square parchment box with a solid 4px border all around.
+
+### Changes Made
+In [src/style.css](file:///f:/NAK-MVP/src/style.css#L578-L611):
+1. **Scroll Caps Hidden**: Added `display: none !important;` to `.scroll-cap` to hide both the top and bottom rolled-up graphics.
+2. **Parchment Container Borders**:
+   - Changed `.scroll-body` to have a full border on all 4 sides (`border: calc(4px * var(--conch-scale, 1)) solid #3c2312`).
+   - Kept the corners square (removed the rounded border radius) so it frames the text box cleanly.
+
+---
+
+## 4. Delay-Triggered Pull String & Voice Audio Effects
+
+We integrated the `pull_string.mp3` sound effect and a weighted random voice responder system from `/public/audios/` to playback audio precisely synced with the cord-pulling action.
+
+### Changes Made
+In [src/main.js](file:///f:/NAK-MVP/src/main.js):
+1. **String Pull Audio**: Plays `/pull_string.mp3` after a 60-frame delay (2000ms at 30 FPS) when the pull action is initiated.
+2. **Conch Response Voice (Weighted Random)**:
+   - Preloaded all 11 voice lines from `/public/audios/`.
+   - Programmed a random selector favoring `No..mp3` and `Nothing..mp3` (weight = 5 each, ~26.3% chance each) over the remaining 9 responses (weight = 1 each, ~5.3% chance each).
+   - Scheduled the voice to trigger after a 124-frame delay (exactly 4133ms at 30 FPS).
+3. **Interrupt Handling**: Added safety loops to pause and reset any currently playing voice/pull audio from previous runs if a new cord pull is requested, preventing overlapping audio.
+4. **Timeout Management & Race Condition Protection**:
+   - Declared global variables `pullSoundTimeoutId`, `voiceSoundTimeoutId`, and `resetCardTimeoutId` to monitor active timeouts.
+   - Implemented proactive clearing (`clearTimeout`) for all pending timeouts inside `onPullCord` and `onPullFinished` to prevent delayed audio or UI state resets from previous runs leaking into subsequent quick pulls.
+
+---
+
+## 5. Verification & Testing
+
+We verified the complete flow using a browser subagent:
+1. **Wallet Connection**: Confirmed correct rendering of mock-connected wallet state at the top banner.
+2. **Oracle Prompt & Signature**: Checked transaction workflow where selecting a question, burning iCP, and approving the signature correctly transitions the UI.
+3. **Audio Delay & Overlap Protection**: Verified that clicking "PULL THE CORD" starts the animation, plays `pull_string.mp3` exactly after 2000ms, and playing a weighted conch response after 4133ms.
+4. **Browser Console Health**: Injected logging hooks to monitor warnings and errors; confirmed **0 console errors or warnings** occurred.
+
+Below is the verified end-to-end flow animation recorded by the browser subagent:
+
+![Browser Flow Recording](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/test_verified_sound_flow_1782502089857.webp)
+
+---
+
+## 6. GPU Warmup & Calibration Correction
+
+### Cause of the Issue
+On the very first visit, the browser must compile shaders, assemble pipelines, and upload textures to the GPU. This creates a brief rendering stutter (high frame times) during the first few frames. 
+
+Because the benchmark started measuring immediately, the initial compilation spike skewed the average frame time upwards, tricking the portal into defaulting to the **Low Quality** profile. On subsequent reloads, the shaders were fetched directly from the browser/driver's compilation caches, resulting in smooth frames and a correct **High/Medium** profile assignment.
+
+### Changes Made
+In [src/main.js](file:///f:/NAK-MVP/src/main.js):
+1. **Warmup Phase Delay**: Added a warmup period (`warmupFrameCount` and `WARMUP_FRAMES_LIMIT = 45`) right after the model is loaded.
+2. **Postponed Calibration**: Delayed the benchmarking loop by 45 frames (about 1.5 seconds) to allow the GPU pipelines to completely initialize and warm up.
+3. **Preloader Sync**: Kept the preloader overlay active during the warmup to hide any initial compilation stutter, ensuring the user only transitions into the scene once performance has stabilized.
+
+---
+
+## 7. Resizing & Viewport Calibration Fix
+
+We resolved the layout issue where the conch shell shrunk to a tiny size and drifted far below the top wooden HUD bar when the window was resized to taller proportions, while adhering to the design specifications in [SCREEN_SYSTEM.md](file:///f:/NAK-MVP/SCREEN_SYSTEM.md).
+
+### Cause of the Issue
+During window resize events, querying `canvasContainer.clientWidth` and `clientHeight` directly in Javascript was subject to a DOM race condition. The browser fired the resize event before recalculating styles and layout, returning the unconstrained window height instead of the clamped `max-height` container height. This caused the JS to compute a false, tall aspect ratio (e.g. `1.10`), which dynamically pushed the camera VFOV to a very wide zoom-out (`22.8°` instead of `12.76°`) and caused overlays (like the card) to scale incorrectly.
+
+### Changes Made
+1. **Synchronous Math Calculations**: In [src/main.js](file:///f:/NAK-MVP/src/main.js), we replaced DOM `clientWidth`/`clientHeight` queries in `getContainerSize()` with a mathematical viewport-to-aspect formula matching the CSS constraints:
+   ```javascript
+   const containerW = w;
+   const containerH = Math.round(Math.min(h, w * (953 / 1920)));
+   ```
+   This is synchronous, completely layout-independent, and eliminates style recalculation race conditions on load and resize.
+2. **Preserving Hor+ Camera Scaling**: Kept the Blender-specified horizontal FOV camera model (`DESIGN_HFOV_DEG = 25.4`) as documented in [SCREEN_SYSTEM.md](file:///f:/NAK-MVP/SCREEN_SYSTEM.md). With the correct container dimensions now being fed into the math, the camera successfully calculates the proper `12.76°` VFOV on tall letterboxed screens, keeping the conch shell at its perfect design size and position without any top-clipping or shrinking.
+
+### Verification Results
+Here are the final screenshots showing perfect layout scaling and alignment:
+
+````carousel
+![Portrait View (500x800)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/portrait_500x800_1782930669128.png)
+<!-- slide -->
+![Landscape View (988x445)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/landscape_988x445_1782930648069.png)
+````
+
+---
+
+## 8. Unified UI Scale System
+
+We implemented a single, unified scale system (`--layout-scale`) for all HTML overlays, ensuring that the brand icon, $NAK title, and Connect Wallet button scale down proportionally on small viewports and portrait modes.
+
+### Cause of the Issue
+Previously, scaling was calculated dynamically from container height. On small or portrait screens where height collapses, the scale dropped to `0.22`, shrinking elements (like the wallet button) to illegible dimensions (~3px). Concurrently, the `$NAK` logo font size was hardcoded to `40px` and did not scale down at all, breaking alignment and clipping off the wooden bar.
+
+### Changes Made
+1. **Width-Based Scaling**: In [src/main.js](file:///f:/NAK-MVP/src/main.js), we updated `updateLayoutScale()` to calculate a single scale factor from the container width (which is always stable as it fills the full viewport width) rather than container height:
+   ```javascript
+   const scale = Math.max(0.35, containerW / 1920);
+   canvasContainer.style.setProperty('--layout-scale', scale);
+   ```
+2. **Unified CSS Formulas**: Replaced all individual layout CSS custom variables with mathematical `calc()` rules in [src/style.css](file:///f:/NAK-MVP/src/style.css) consuming `--layout-scale`. We added `clamp()` limits to prevent text from shrinking below a legible threshold:
+   - Header Bar: Height and padding scale together.
+   - Logo Text (`$NAK`): Scaled via `clamp(12px, calc(40px * var(--layout-scale)), 40px)`.
+   - Connect Wallet Button & Options: Size, borders, padding, shadows, and emoji sizes scale proportionally.
+   - Brand Icon: Resizes dynamically using `--layout-scale`.
+
+### Verification Results
+Here are the screenshots demonstrating the proportional layout scaling at small/narrow viewports:
+
+````carousel
+![Narrow Portrait View (600x900)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/portrait_narrow_1782933476763.png)
+<!-- slide -->
+![Mini Portrait View (400x700)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/portrait_mini_1782933504504.png)
+````
+
+---
+
+## 9. Cord Pull Lockout Fix
+
+We resolved a vulnerability where the user was able to click "PULL THE CORD" multiple times after the pulling animation completed, triggering successive animations and sound effects for a single paid query.
+
+### Cause of the Issue
+When the camera animation finished, the event handler `onPullFinished()` set `isPulling = false` and re-enabled the "PULL THE CORD" button (`conchPullBtn.disabled = false`). During the 5-second interval before the card automatically reset back to the ask state, the button remained visible and active in the UI, allowing duplicate triggers.
+
+### Changes Made
+In [src/main.js](file:///f:/NAK-MVP/src/main.js):
+1. **Lock Button Post-Animation**: Modified `onPullFinished()` to keep the button disabled and update its text to **`Oracle Answered`**:
+   ```javascript
+   if (conchPullBtn) {
+     conchPullBtn.disabled = true;
+     conchPullBtn.querySelector('.wood-btn-text').textContent = 'Oracle Answered';
+   }
+   ```
+2. **Reset State Re-enabling**: Updated the card reset method `resetCardToAskState()` to re-enable the button and restore the text back to **`PULL THE CORD`** so it's fresh and ready for the next transaction:
+   ```javascript
+   if (conchPullBtn) {
+     conchPullBtn.disabled = false;
+     conchPullBtn.querySelector('.wood-btn-text').textContent = 'PULL THE CORD';
+   }
+   ```
+
+### Verification Results
+Below are the screenshots of the disabled state and the subsequent auto-reset:
+
+````carousel
+![Button Disabled (Oracle Answered)](/oracle_answered.png)
+<!-- slide -->
+![Card Automatically Reset (Ask the Conch)](/ask_conch_reset.png)
+````
+
+---
+
+## 10. Mobile Portrait Scene (Scene_Vertical.glb) Support
+
+We added support for dynamically loading the portrait-specific scene (`Scene_Vertical.glb`) when the application runs on vertical/mobile layouts.
+
+### Changes Made
+1. **Dynamic Model Loading & Disposal**: In [src/main.js](file:///f:/NAK-MVP/src/main.js), we updated `loadModel()` to automatically detect orientation and load the correct GLB asset (`Scene_Desktop.glb` vs `Scene_Vertical.glb`). When switching, it disposes of old geometries and materials to prevent WebGL context memory leaks.
+2. **Container Sizing Aspect Capping**: Extended `getContainerSize()` and media queries in [src/style.css](file:///f:/NAK-MVP/src/style.css) to enforce a `886/1920` aspect lock in portrait mode (matching iPhone's standard 9:19.5 aspect ratio), preserving the layout proportions without stretching:
+   - Max container height set to `calc(100vw * 1920 / 886)`.
+   - Max container width capped to `calc(100vh * 886 / 1920)`.
+3. **Decoupled Landscape & Portrait HUDs**: We decoupled the landscape HUD styling from the portrait mobile overrides:
+   - In landscape viewports (default), the top HUD bar, brand logo container, and Connect Wallet button/dropdown remain exactly as they were originally, using `--layout-scale` and their original positioning.
+   - In portrait viewports (mobile/vertical screen), the elements automatically shift to mobile-specific overrides inside the `@media (orientation: portrait)` query, using a boosted `--hud-scale` (+35% larger) to maximize legibility on small phone viewports.
+   - **Aligned Centering**: Shifted the mobile HUD center line down to `calc(85px * var(--hud-scale))` so the conch logo icon, `$NAK` text, and Connect Wallet button sit exactly centered on the 3D wooden banner beam without hitting or cutting off at the top edge.
+   - **HUD Banner Layer Separation**: In `Scene_Vertical.glb`, the wooden HUD banner is split into multiple meshes (`tabla_hud` and `tabla_hud002`). We updated the model traversal in `loadModel()` to check using `.startsWith('tabla_hud')` so that all parts of the mobile HUD banner are correctly moved to Layer 1, completely excluding them from post-processing depth of field blur and keeping the entire frame 100% sharp.
+   - **Scale Variable Context Inheritance**: Moved scale variable declarations from `:root` directly into `.canvas-container` so they inherit the inline layout scale context correctly.
+4. **Card Repositioning**: Repositioned the conch oracle card overlay (`#ask-conch-overlay`) in portrait viewports using CSS media queries to align with the upper-middle region of the screen (shifted to `calc(185px * var(--hud-scale))` to clear the taller mobile HUD bar and centered horizontally), ensuring zero overlap with the 3D conch shell model at the bottom.
+5. **Resolution-Proportional Depth of Field & Benchmarking**:
+   - **Resolution-Proportional Blur**: We scale the uniform `dofUniformBokehScale` dynamically inside both `buildPostProcessing()` and `onWindowResize()` based on the actual rendering height (using `953px` as the baseline):
+     ```js
+     dofUniformBokehScale.value = CONFIG.dofBokehScale * (res.h / 953);
+     ```
+     This keeps the blur circle constant in terms of vertical screen percentage (approx. 1.4% height), resulting in an equally rich, deep cinematic blur in both landscape and portrait orientations.
+   - **Calibration Profiles & HUD Render Fix**: Restored the default calibrator routine. Mobile devices initialize in `MEDIUM` and scale down to `LOW` if performance drops below 28 FPS.
+   - **HUD Layer compositing when DoF is disabled**: In the `LOW` quality profile, Depth of Field is disabled (`enableDoF: false`). Originally, this bypassed the compositing pass entirely, making the Layer 1 `tabla_hud` components disappear completely. We fixed this by ensuring that when DoF is disabled, the Layer 1 HUD pass is still correctly composited on top of the main scene:
+     ```js
+     const baseColorNode = CONFIG.enableSMAA ? smaa(scenePassColor) : scenePassColor;
+     postProcessing.outputNode = mix(baseColorNode, hudPassColor, hudMask);
+     ```
+6. **Orientation Transitions & Fitting**:
+   - Re-trigger loading on-the-fly inside the resize event handler when crossing orientation thresholds.
+   - Constrained the camera fitting model: Hor+ zoom (design HFOV = 25.4°) for desktop landscape, and Vert+ zoom (constant vertical VFOV = 25.36°) for mobile portrait.
+7. **Mobile Viewport & System UI Spacing (Clearances)**:
+   - **`100svh` Stabilization**: Replaced standard `100vh` on the `body` and `#app` wrapper with `100svh` to lock layout heights to the visible screen area, preventing dynamic mobile toolbars from obscuring content.
+   - **Notch Safe Area Padding**: Upgraded the viewport meta tag in `index.html` with `viewport-fit=cover`, and shifted the portrait HUD bar and dropdowns down by `env(safe-area-inset-top, 0px)` in `src/style.css` to protect logo and buttons from notch and camera cutouts.
+   - **Bottom Indicator Padding**: Added `padding-bottom: env(safe-area-inset-bottom, 0px)` on `.canvas-container` in portrait mode to clear the iOS home swipe-bar indicator gesture area.
+   - **VisualViewport API Integration**: Replaced standard `window` height checks with the `visualViewport` API inside `getContainerSize()` in `src/main.js` to ensure rendering calculations remain perfectly stable when browser toolbars shrink/grow on scroll.
+
+### Verification Results
+Here are the screenshots demonstrating the dynamic orientation switching, the aspect ratio stretching fix, the restored landscape HUD layout, the decoupled portrait mobile layout, the scaled portrait Depth of Field, and safe area/viewport support:
+
+````carousel
+![Landscape View Restored (Scene_Desktop)](/landscape_original_restored.png)
+<!-- slide -->
+![Portrait View Overridden (Scene_Vertical)](/portrait_mobile_overridden.png)
+<!-- slide -->
+![Portrait Depth of Field Blur Aligned](/portrait_dof_verified.png)
+<!-- slide -->
+![Portrait Pulled (Oracle Answered)](/portrait_pulled.png)
+<!-- slide -->
+![Landscape Switch Back](/landscape_switched_back.png)
+<!-- slide -->
+![Mobile Viewport Safe Areas Verified](/safe_areas_verified.png)
+````

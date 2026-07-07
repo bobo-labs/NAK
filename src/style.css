@@ -27,6 +27,7 @@ body {
   margin: 0;
   width: 100vw;
   height: 100vh;
+  height: 100svh;
   font-family: var(--font-family);
   background:
     radial-gradient(circle at 10% 20%, rgba(255, 207, 90, 0.04), transparent 40%),
@@ -40,6 +41,7 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100svh;
   background: #000;
   /* Dark spaces letterbox/pillarbox */
   display: flex;
@@ -59,6 +61,9 @@ body {
   background: linear-gradient(135deg, var(--color-bg-start) 0%, var(--color-bg-mid) 50%, var(--color-bg-end) 100%);
   overflow: hidden;
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+  --hud-scale: var(--layout-scale, 1);
+  --conch-scale-y: var(--conch-scale, 1);
+  --conch-font-scale: var(--conch-scale, 1);
 }
 
 canvas {
@@ -313,12 +318,12 @@ canvas {
   top: 0;
   left: 0;
   width: 100%;
-  height: 60px;
+  height: calc(60px * var(--layout-scale, 1));
   background: transparent;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 calc(24px * var(--layout-scale, 1));
   z-index: 120;
   font-family: var(--font-family), sans-serif;
   transition: opacity 0.5s ease;
@@ -334,13 +339,13 @@ canvas {
 
 .hud-logo-text-nak {
   font-family: var(--font-family), sans-serif;
-  font-size: 40px;
+  font-size: clamp(12px, calc(40px * var(--layout-scale, 1)), 40px);
   font-weight: 0;
   color: #c8a8d9;
-  text-shadow: 2px 2px 0px #1a0d07;
+  text-shadow: calc(2px * var(--layout-scale, 1)) calc(2px * var(--layout-scale, 1)) 0px #1a0d07;
   text-transform: uppercase;
   user-select: none;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 calc(2px * var(--layout-scale, 1)) calc(4px * var(--layout-scale, 1)) rgba(0, 0, 0, 0.3));
 }
 
 /* Wallet Connect styles */
@@ -350,7 +355,7 @@ canvas {
      line, which is the same axis as the icon + $NAK text on the left. */
   top: 56%;
   right: 0;
-  transform: translate(calc(-1 * var(--wallet-offset-x, 24px)), -50%);
+  transform: translate(calc(-1 * calc(24px * var(--layout-scale, 1))), -50%);
   font-family: var(--font-family), sans-serif;
   pointer-events: auto;
   /* Enable clicks on the wallet button */
@@ -359,15 +364,15 @@ canvas {
 .wallet-connect-btn {
   background: #ff8ca3;
   /* Hot pink/coral button */
-  border: var(--wallet-border-width, 3px) solid #3c2312;
+  border: calc(3px * var(--layout-scale, 1)) solid #3c2312;
   color: #1a0d07;
   font-family: var(--font-family), sans-serif;
-  font-size: var(--wallet-font-size, 0.9rem);
+  font-size: clamp(10px, calc(16px * var(--layout-scale, 1)), 16px);
   font-weight: 700;
-  padding: var(--wallet-padding-y, 8px) var(--wallet-padding-x, 18px);
-  border-radius: var(--wallet-border-radius, 10px);
+  padding: calc(8px * var(--layout-scale, 1)) calc(18px * var(--layout-scale, 1));
+  border-radius: calc(10px * var(--layout-scale, 1));
   cursor: pointer;
-  box-shadow: 0 var(--wallet-shadow-size, 4px) 0px #3c2312;
+  box-shadow: 0 calc(4px * var(--layout-scale, 1)) 0px #3c2312;
   text-transform: uppercase;
   transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s ease;
 }
@@ -377,20 +382,20 @@ canvas {
 }
 
 .wallet-connect-btn:active {
-  transform: translateY(var(--wallet-active-translate, 2px));
-  box-shadow: 0 var(--wallet-active-shadow, 2px) 0px #3c2312;
+  transform: translateY(calc(2px * var(--layout-scale, 1)));
+  box-shadow: 0 calc(2px * var(--layout-scale, 1)) 0px #3c2312;
 }
 
 .wallet-dropdown {
   position: absolute;
-  top: var(--wallet-dropdown-top, 52px);
+  top: calc(52px * var(--layout-scale, 1));
   right: 0;
-  width: var(--wallet-dropdown-width, 250px);
+  width: calc(250px * var(--layout-scale, 1));
   background: #aee8f5;
   /* Spongebob water blue */
-  border: var(--wallet-border-width, 4px) solid #3c2312;
-  border-radius: var(--wallet-dropdown-radius, 16px);
-  box-shadow: 0 var(--wallet-shadow-size, 10px) 25px rgba(0, 0, 0, 0.5);
+  border: calc(3px * var(--layout-scale, 1)) solid #3c2312;
+  border-radius: calc(16px * var(--layout-scale, 1));
+  box-shadow: 0 calc(10px * var(--layout-scale, 1)) 25px rgba(0, 0, 0, 0.5);
   z-index: 130;
   overflow: hidden;
   animation: dropdownSlideIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -415,11 +420,11 @@ canvas {
 .wallet-dropdown-header {
   background: #ff8ca3;
   color: #1a0d07;
-  padding: var(--wallet-dropdown-padding, 10px);
+  padding: calc(10px * var(--layout-scale, 1));
   text-align: center;
   font-weight: 700;
-  font-size: var(--wallet-font-size, 0.9rem);
-  border-bottom: var(--wallet-border-width, 3px) solid #3c2312;
+  font-size: clamp(10px, calc(16px * var(--layout-scale, 1)), 16px);
+  border-bottom: calc(3px * var(--layout-scale, 1)) solid #3c2312;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -427,8 +432,8 @@ canvas {
 .wallet-options {
   display: flex;
   flex-direction: column;
-  padding: var(--wallet-options-padding, 8px);
-  gap: var(--wallet-options-gap, 8px);
+  padding: calc(8px * var(--layout-scale, 1));
+  gap: calc(8px * var(--layout-scale, 1));
 }
 
 .wallet-option-btn {
@@ -436,12 +441,12 @@ canvas {
   align-items: center;
   width: 100%;
   background: rgba(255, 255, 255, 0.5);
-  border: var(--wallet-option-border-width, 2px) solid #3c2312;
-  border-radius: var(--wallet-option-radius, 8px);
-  padding: var(--wallet-option-padding, 8px 12px);
+  border: calc(2px * var(--layout-scale, 1)) solid #3c2312;
+  border-radius: calc(8px * var(--layout-scale, 1));
+  padding: calc(8px * var(--layout-scale, 1)) calc(12px * var(--layout-scale, 1));
   cursor: pointer;
   font-family: var(--font-family), sans-serif;
-  font-size: var(--wallet-option-font-size, 0.8rem);
+  font-size: clamp(10px, calc(14px * var(--layout-scale, 1)), 14px);
   font-weight: 700;
   color: #3c2312;
   text-align: left;
@@ -454,8 +459,8 @@ canvas {
 }
 
 .wallet-icon-emoji {
-  font-size: var(--wallet-emoji-size, 1.2rem);
-  margin-right: var(--wallet-emoji-margin, 8px);
+  font-size: clamp(12px, calc(20px * var(--layout-scale, 1)), 20px);
+  margin-right: calc(8px * var(--layout-scale, 1));
   display: inline-block;
 }
 
@@ -466,7 +471,7 @@ canvas {
   right: calc(150px * var(--conch-scale, 1));
   width: calc(450px * var(--conch-scale, 1));
   height: calc(100% - 25%);
-  max-height: calc(520px * var(--conch-scale, 1));
+  max-height: calc(520px * var(--conch-scale-y, 1));
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -486,11 +491,11 @@ canvas {
   height: 100%;
   background: #ffd635;
   /* Bright sponge yellow */
-  border: calc(5px * var(--conch-scale, 1)) solid #3c2312;
+  border: calc(5px * var(--conch-scale-y, 1)) solid #3c2312;
   /* Cartoon brown border */
-  border-radius: calc(28px * var(--conch-scale, 1));
-  padding: calc(24px * var(--conch-scale, 1)) calc(20px * var(--conch-scale, 1));
-  box-shadow: 0 calc(15px * var(--conch-scale, 1)) calc(35px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.6);
+  border-radius: calc(28px * var(--conch-scale-y, 1));
+  padding: calc(24px * var(--conch-scale-y, 1)) calc(20px * var(--conch-scale, 1));
+  box-shadow: 0 calc(15px * var(--conch-scale-y, 1)) calc(35px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -544,22 +549,22 @@ canvas {
 }
 
 .card-title {
-  font-size: calc(1.8rem * var(--conch-scale, 1));
+  font-size: calc(1.8rem * var(--conch-font-scale, 1));
   font-weight: 700;
   color: #1a0d07;
-  text-shadow: calc(2px * var(--conch-scale, 1)) calc(2px * var(--conch-scale, 1)) 0px rgba(255, 255, 255, 0.4);
+  text-shadow: calc(2px * var(--conch-font-scale, 1)) calc(2px * var(--conch-font-scale, 1)) 0px rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
-  margin-bottom: calc(2px * var(--conch-scale, 1));
+  margin-bottom: calc(2px * var(--conch-scale-y, 1));
   letter-spacing: 0.04em;
   text-align: center;
 }
 
 .card-subtitle {
-  font-size: calc(0.95rem * var(--conch-scale, 1));
+  font-size: calc(0.95rem * var(--conch-font-scale, 1));
   font-weight: 600;
   color: #5e3816;
   text-transform: uppercase;
-  margin-bottom: calc(16px * var(--conch-scale, 1));
+  margin-bottom: calc(16px * var(--conch-scale-y, 1));
   letter-spacing: 0.06em;
   text-align: center;
 }
@@ -570,8 +575,8 @@ canvas {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  margin-bottom: calc(18px * var(--conch-scale, 1));
-  max-height: calc(290px * var(--conch-scale, 1));
+  margin-bottom: calc(18px * var(--conch-scale-y, 1));
+  max-height: calc(290px * var(--conch-scale-y, 1));
 }
 
 .scroll-cap {
@@ -581,11 +586,11 @@ canvas {
 .scroll-body {
   background: #f6ebd2;
   /* Parchment scroll yellow */
-  border: calc(4px * var(--conch-scale, 1)) solid #3c2312;
-  padding: calc(14px * var(--conch-scale, 1)) calc(12px * var(--conch-scale, 1));
+  border: calc(4px * var(--conch-scale-y, 1)) solid #3c2312;
+  padding: calc(14px * var(--conch-scale-y, 1)) calc(12px * var(--conch-scale, 1));
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--conch-scale, 1));
+  gap: calc(10px * var(--conch-scale-y, 1));
   overflow-y: auto;
   flex-grow: 1;
   box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.4);
@@ -619,8 +624,8 @@ canvas {
   align-items: flex-start;
   gap: calc(10px * var(--conch-scale, 1));
   cursor: pointer;
-  padding: calc(6px * var(--conch-scale, 1)) calc(8px * var(--conch-scale, 1));
-  border-radius: calc(8px * var(--conch-scale, 1));
+  padding: calc(6px * var(--conch-scale-y, 1)) calc(8px * var(--conch-scale, 1));
+  border-radius: calc(8px * var(--conch-scale-y, 1));
   transition: background-color 0.15s ease;
 }
 
@@ -638,7 +643,7 @@ canvas {
   border: calc(2px * var(--conch-scale, 1)) solid #3c2312;
   border-radius: 50%;
   background: #fff;
-  margin-top: calc(2px * var(--conch-scale, 1));
+  margin-top: calc(2px * var(--conch-scale-y, 1));
   position: relative;
   flex-shrink: 0;
   box-shadow: inset 0 calc(2px * var(--conch-scale, 1)) calc(4px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.1);
@@ -656,7 +661,7 @@ canvas {
 }
 
 .question-text {
-  font-size: calc(1.1rem * var(--conch-scale, 1));
+  font-size: calc(1.1rem * var(--conch-font-scale, 1));
   font-weight: 700;
   color: #3c2312;
   line-height: 1.35;
@@ -668,10 +673,10 @@ canvas {
   position: relative;
   background: transparent;
   border: none;
-  padding: calc(12px * var(--conch-scale, 1)) calc(18px * var(--conch-scale, 1));
+  padding: calc(12px * var(--conch-scale-y, 1)) calc(18px * var(--conch-scale, 1));
   cursor: pointer;
   width: 100%;
-  filter: drop-shadow(0 calc(5px * var(--conch-scale, 1)) 0px #1a0d07) drop-shadow(0 calc(8px * var(--conch-scale, 1)) calc(6px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 calc(5px * var(--conch-scale-y, 1)) 0px #1a0d07) drop-shadow(0 calc(8px * var(--conch-scale-y, 1)) calc(6px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.35));
   transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
   outline: none;
   flex-shrink: 0;
@@ -692,7 +697,7 @@ canvas {
   background-size: 200% 200%;
   background-repeat: no-repeat;
   background-position: 25% 50%;
-  box-shadow: inset 0 0 0 calc(3.5px * var(--conch-scale, 1)) #1a0d07;
+  box-shadow: inset 0 0 0 calc(3.5px * var(--conch-scale-y, 1)) #1a0d07;
   clip-path: polygon(0% 4%,
       15% 2%,
       35% 5%,
@@ -728,8 +733,8 @@ canvas {
 }
 
 .wood-btn:not(:disabled):active {
-  transform: translateY(calc(3px * var(--conch-scale, 1)));
-  filter: drop-shadow(0 calc(2px * var(--conch-scale, 1)) 0px #1a0d07) drop-shadow(0 calc(4px * var(--conch-scale, 1)) calc(3px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.45));
+  transform: translateY(calc(3px * var(--conch-scale-y, 1)));
+  filter: drop-shadow(0 calc(2px * var(--conch-scale-y, 1)) 0px #1a0d07) drop-shadow(0 calc(4px * var(--conch-scale-y, 1)) calc(3px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.45));
 }
 
 .wood-btn:disabled {
@@ -744,10 +749,10 @@ canvas {
 
 .wood-btn-text {
   font-family: var(--font-family), sans-serif;
-  font-size: calc(0.95rem * var(--conch-scale, 1));
+  font-size: calc(0.95rem * var(--conch-font-scale, 1));
   font-weight: 700;
   color: #ffffff;
-  text-shadow: calc(2px * var(--conch-scale, 1)) calc(2px * var(--conch-scale, 1)) 0px #1a0d07;
+  text-shadow: calc(2px * var(--conch-font-scale, 1)) calc(2px * var(--conch-font-scale, 1)) 0px #1a0d07;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: block;
@@ -761,13 +766,13 @@ canvas {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: calc(20px * var(--conch-scale, 1));
+  margin-bottom: calc(20px * var(--conch-scale-y, 1));
 }
 
 .pull-rope-graphic {
-  font-size: calc(4.5rem * var(--conch-scale, 1));
+  font-size: calc(4.5rem * var(--conch-font-scale, 1));
   animation: ropeSwing 3s infinite ease-in-out;
-  filter: drop-shadow(0 calc(10px * var(--conch-scale, 1)) calc(15px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 calc(10px * var(--conch-scale-y, 1)) calc(15px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.2));
 }
 
 @keyframes ropeSwing {
@@ -1009,7 +1014,7 @@ canvas {
   display: flex;
   align-items: center;
   gap: 12px;
-  transform: translate(var(--hud-icon-offset, 10px), -50%);
+  transform: translate(calc(10px * var(--layout-scale, 1)), -50%);
   z-index: 130;
   /* Place above the transparent top HUD bar (which is 120) */
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
@@ -1023,8 +1028,8 @@ canvas {
 
 .hud-icon-btn {
   position: relative;
-  width: var(--hud-icon-size, 50px);
-  height: var(--hud-icon-size, 50px);
+  width: calc(50px * var(--layout-scale, 1));
+  height: calc(50px * var(--layout-scale, 1));
   background: transparent;
   border: none;
   padding: 0;
@@ -1057,4 +1062,103 @@ canvas {
 /* Global utility class for hiding elements */
 .hidden {
   display: none !important;
+}
+
+/* Portrait/Vertical layout configurations (886x1920 reference) */
+@media (orientation: portrait) {
+  .canvas-container {
+    max-height: calc(100vw * 1920 / 886);
+    max-width: calc(100vh * 886 / 1920);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --hud-scale: calc(var(--layout-scale, 1) * 1.35);
+    /* 35% larger HUD bar elements */
+    --conch-scale-y: calc(var(--conch-scale, 1) * 0.72);
+    /* 28% more tiny vertically */
+    --conch-font-scale: calc(var(--conch-scale, 1) * 0.78);
+    /* 22% more tiny fonts */
+  }
+
+  /* Mobile HUD overrides */
+  .top-hud-bar {
+    height: calc(calc(101px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(env(safe-area-inset-left, 0px), calc(24px * var(--hud-scale, 1)));
+    padding-right: max(env(safe-area-inset-right, 0px), calc(24px * var(--hud-scale, 1)));
+  }
+
+  .hud-logo-text-nak {
+    font-size: clamp(12px, calc(40px * var(--hud-scale, 1)), 40px);
+    text-shadow: calc(2px * var(--hud-scale, 1)) calc(2px * var(--hud-scale, 1)) 0px #1a0d07;
+    filter: drop-shadow(0 calc(2px * var(--hud-scale, 1)) calc(4px * var(--hud-scale, 1)) rgba(0, 0, 0, 0.3));
+  }
+
+  .hud-brand-container {
+    top: calc(calc(57px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    gap: calc(12px * var(--hud-scale, 1));
+    transform: translate(calc(10px * var(--hud-scale, 1)), -50%);
+  }
+
+  .hud-icon-btn {
+    width: clamp(15px, calc(50px * var(--hud-scale, 1)), 50px);
+    height: clamp(15px, calc(50px * var(--hud-scale, 1)), 50px);
+  }
+
+  .wallet-connect-wrapper {
+    top: calc(calc(50.5px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    transform: translate(calc(-1 * calc(24px * var(--hud-scale, 1))), -50%);
+  }
+
+  .wallet-connect-btn {
+    border: calc(3px * var(--hud-scale, 1)) solid #3c2312;
+    font-size: clamp(10px, calc(16px * var(--hud-scale, 1)), 16px);
+    padding: calc(8px * var(--hud-scale, 1)) calc(18px * var(--hud-scale, 1));
+    border-radius: calc(10px * var(--hud-scale, 1));
+    box-shadow: 0 calc(4px * var(--hud-scale, 1)) 0px #3c2312;
+  }
+
+  .wallet-connect-btn:active {
+    transform: translateY(calc(2px * var(--hud-scale, 1)));
+    box-shadow: 0 calc(2px * var(--hud-scale, 1)) 0px #3c2312;
+  }
+
+  .wallet-dropdown {
+    top: calc(calc(52px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    width: calc(250px * var(--hud-scale, 1));
+    border: calc(3px * var(--hud-scale, 1)) solid #3c2312;
+    border-radius: calc(16px * var(--hud-scale, 1));
+    box-shadow: 0 calc(10px * var(--hud-scale, 1)) 25px rgba(0, 0, 0, 0.5);
+  }
+
+  .wallet-dropdown-header {
+    padding: calc(10px * var(--hud-scale, 1));
+    font-size: clamp(10px, calc(16px * var(--hud-scale, 1)), 16px);
+    border-bottom: calc(3px * var(--hud-scale, 1)) solid #3c2312;
+  }
+
+  .wallet-options {
+    padding: calc(8px * var(--hud-scale, 1));
+    gap: calc(8px * var(--hud-scale, 1));
+  }
+
+  .wallet-option-btn {
+    border: calc(2px * var(--hud-scale, 1)) solid #3c2312;
+    border-radius: calc(8px * var(--hud-scale, 1));
+    padding: calc(8px * var(--hud-scale, 1)) calc(12px * var(--hud-scale, 1));
+    font-size: clamp(10px, calc(14px * var(--hud-scale, 1)), 14px);
+  }
+
+  .wallet-icon-emoji {
+    font-size: clamp(12px, calc(20px * var(--hud-scale, 1)), 20px);
+    margin-right: calc(8px * var(--hud-scale, 1));
+  }
+
+  .ask-conch-overlay {
+    top: calc(calc(185px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(90%, calc(450px * var(--conch-scale, 1)));
+    height: auto;
+    max-height: calc(480px * var(--conch-scale-y, 1));
+  }
 }

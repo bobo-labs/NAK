@@ -207,6 +207,8 @@ for (let i = 1; i <= totalFrames; i++) {
 
 // ---- HUD plane (button anchor) ----
 let hudPlane = null;
+let currentModelPath = null;
+let loadedModelGroup = null;
 
 // ---- Target objects for calculations ----
 let conchMesh = null;
@@ -243,6 +245,7 @@ let lastFrameTime = 0;
 let lastRenderTime = 0;
 let _resizeTimer = null;  // debounce handle for window resize events
 let currentProfileName = 'HIGH';
+let isMobile = false;
 
 function setProgress(percent, status) {
   if (preloaderProgress) {
@@ -324,7 +327,7 @@ function applyQualityProfile(profileName) {
   if (renderer) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.pixelRatioMax));
     const size = getContainerSize();
-    const res = getRenderResolution(size.w);
+    const res = getRenderResolution(size.w, size.h);
     renderer.setSize(res.w, res.h, false);
 
     const canvas = renderer.domElement;
@@ -427,7 +430,7 @@ async function init() {
   activeCamera = defaultCamera;
 
   // --- Detect initial device capability profile ---
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const hasWebGPU = !!navigator.gpu;
 
   // --- Check for software rendering (disabled hardware acceleration) ---
@@ -551,10 +554,14 @@ async function init() {
   // Debounced resize: dragging the window edge fires dozens of events per second.
   // Each resize call reallocates the WebGL framebuffer — expensive GPU op.
   // Wait 100ms of idle before executing the actual resize.
-  window.addEventListener('resize', () => {
+  const handleResize = () => {
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(onWindowResize, 100);
-  });
+  };
+  window.addEventListener('resize', handleResize);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleResize);
+  }
 
   // Randomize Question #2 on load
   const randomTokens = ['$EXE', '$WUMBO', '$MCDOMS'];
@@ -701,7 +708,11 @@ function buildPostProcessing(camera) {
   // Uniform nodes allow live-tweaking CONFIG values each frame
   dofUniformFocus = uniform(CONFIG.dofFocus);
   dofUniformFocalLength = uniform(CONFIG.dofFocalLength);
-  dofUniformBokehScale = uniform(CONFIG.dofBokehScale);
+
+  // Scale the initial bokeh blur radius based on the current render target height to compensate for high DPI/vertical resolutions
+  const _size = getContainerSize();
+  const _res = getRenderResolution(_size.w, _size.h);
+  dofUniformBokehScale = uniform(CONFIG.dofBokehScale * (_res.h / 953));
 
   // ── Main scene pass (all layers, including tabla_hud) with toon outlines ─────
   if (CONFIG.enableOutline) {
@@ -767,12 +778,9 @@ function buildPostProcessing(camera) {
     const postDofNode = CONFIG.enableSMAA ? smaa(currentDofNode) : currentDofNode;
     postProcessing.outputNode = mix(postDofNode, hudPassColor, hudMask);
   } else {
-    // No DoF — no compositing needed, HUD is naturally sharp
-    if (CONFIG.enableSMAA) {
-      postProcessing.outputNode = smaa(scenePassColor);
-    } else {
-      postProcessing.outputNode = scenePassColor;
-    }
+    // No DoF — composite the HUD (layer 1) on top of the main scene (layer 0)
+    const baseColorNode = CONFIG.enableSMAA ? smaa(scenePassColor) : scenePassColor;
+    postProcessing.outputNode = mix(baseColorNode, hudPassColor, hudMask);
   }
 }
 
@@ -780,14 +788,66 @@ function buildPostProcessing(camera) {
 // =============================================================================
 // 3. LOAD MODEL
 // =============================================================================
-function loadModel() {
+function loadModel(modelPath) {
+  // Determine target model dynamically if not explicitly specified
+  if (!modelPath) {
+    const isVertical = window.innerHeight > window.innerWidth;
+    modelPath = isVertical ? '/Scene_Vertical.glb' : '/Scene_Desktop.glb';
+  }
+
+  // Smooth preloader transition during orientation switches
+  if (preloader) {
+    preloader.style.display = 'flex';
+    preloader.classList.remove('fade-out');
+    setProgress(10, 'Loading Portal...');
+  }
+
+  // Clear previous model from the scene to prevent overlapping/memory leaks
+  if (loadedModelGroup) {
+    scene.remove(loadedModelGroup);
+    loadedModelGroup.traverse((child) => {
+      if (child.isMesh) {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      }
+    });
+    loadedModelGroup = null;
+  }
+
+  // Stop active animations/timeouts
+  if (pullSoundTimeoutId) { clearTimeout(pullSoundTimeoutId); pullSoundTimeoutId = null; }
+  if (voiceSoundTimeoutId) { clearTimeout(voiceSoundTimeoutId); voiceSoundTimeoutId = null; }
+  if (resetCardTimeoutId) { clearTimeout(resetCardTimeoutId); resetCardTimeoutId = null; }
+  isPulling = false;
+  conchVoices.forEach(item => {
+    item.audio.pause();
+    item.audio.currentTime = 0;
+  });
+
+  // Clear tracking references
+  bgMeshes.length = 0;
+  pullActions.length = 0;
+  cameraAction = null;
+  hudPlane = null;
+  tablaHudMesh = null;
+  conchMesh = null;
+
+  currentModelPath = modelPath;
+
   const loader = new GLTFLoader();
   setProgress(25, 'Downloading Portal assets...');
 
   loader.load(
-    '/Scene_Desktop.glb',
+    modelPath,
     (gltf) => {
       const model = gltf.scene;
+      loadedModelGroup = model;
       scene.add(model);
 
       console.log('[GLB] Loaded. Animations:', gltf.animations.map(c => c.name));
@@ -835,9 +895,11 @@ function loadModel() {
         }
 
         // New HUD anchor object (tabla_hud) - parented to camera, inherits camera animation
-        if (child.isMesh && child.name.toLowerCase() === 'tabla_hud') {
-          console.log('[HUD] Tabla HUD found:', child.name);
-          tablaHudMesh = child;
+        if (child.isMesh && child.name.toLowerCase().startsWith('tabla_hud')) {
+          console.log('[HUD] Tabla HUD component found:', child.name);
+          if (child.name.toLowerCase() === 'tabla_hud') {
+            tablaHudMesh = child;
+          }
           // !! Layer 1 ONLY — do NOT keep in layer 0 !!
           // Using layers.set(1) removes tabla_hud from layer 0 (the main scene pass
           // that feeds into DoF). This means:
@@ -915,14 +977,17 @@ function loadModel() {
       if (glbCamera) {
         activeCamera = glbCamera;
 
-        // Use the Blender-reported horizontal FOV (25.4°) as the source of truth.
-        // VFOV is computed from this HFOV and the initial container aspect so that
-        // the horizontal framing is always identical to the Blender render.
-        const _cW = canvasContainer ? canvasContainer.clientWidth : window.innerWidth;
-        const _cH = canvasContainer ? canvasContainer.clientHeight : window.innerHeight;
-        const _initAspect = (_cH > 0) ? (_cW / _cH) : (1920 / 953);
-        const _hHalfRad = THREE.MathUtils.degToRad(DESIGN_HFOV_DEG / 2);
-        designFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(_hHalfRad) / _initAspect));
+        const size = getContainerSize();
+        const _initAspect = (size.h > 0) ? (size.w / size.h) : (1920 / 953);
+
+        const isPortraitModel = currentModelPath && currentModelPath.includes('Vertical');
+        if (isPortraitModel) {
+          designFov = 25.36; // Constant Vert+ for portrait camera
+        } else {
+          // Use the Blender-reported horizontal FOV (25.4°) as the source of truth.
+          const _hHalfRad = THREE.MathUtils.degToRad(DESIGN_HFOV_DEG / 2);
+          designFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(_hHalfRad) / _initAspect));
+        }
         designAspect = null;
 
         activeCamera.aspect = _initAspect;
@@ -931,7 +996,7 @@ function loadModel() {
         activeCamera.updateWorldMatrix(true, false);
         controls.enabled = false;
 
-        console.log(`[Camera] HFOV: ${DESIGN_HFOV_DEG}° | init aspect: ${_initAspect.toFixed(3)} | VFOV: ${designFov.toFixed(2)}°`);
+        console.log(`[Camera] Path: ${currentModelPath} | init aspect: ${_initAspect.toFixed(3)} | VFOV: ${designFov.toFixed(2)}°`);
         console.log('[Camera] Active:', glbCamera.name, '| near:', glbCamera.near, '| far:', glbCamera.far);
       } else {
         console.warn('[Camera] No GLB camera found – using default OrbitControls camera.');
@@ -1033,6 +1098,10 @@ function resetCardToAskState() {
   if (burnBtn) burnBtn.disabled = true;
   if (cardStatePull) cardStatePull.classList.add('hidden');
   if (cardStateAsk) cardStateAsk.classList.remove('hidden');
+  if (conchPullBtn) {
+    conchPullBtn.disabled = false;
+    conchPullBtn.querySelector('.wood-btn-text').textContent = 'PULL THE CORD';
+  }
 }
 
 function onPullCord() {
@@ -1089,8 +1158,8 @@ function onPullCord() {
 function onPullFinished() {
   isPulling = false;
   if (conchPullBtn) {
-    conchPullBtn.disabled = false;
-    conchPullBtn.querySelector('.wood-btn-text').textContent = 'Pull the Cord';
+    conchPullBtn.disabled = true;
+    conchPullBtn.querySelector('.wood-btn-text').textContent = 'Oracle Answered';
   }
 
   pullActions.forEach(action => action.stop());
@@ -1146,12 +1215,22 @@ function stopIconAnimation() {
 // =============================================================================
 // 6. RESIZE
 // =============================================================================
-// Helper to calculate the current container dimensions (fills full viewport — no aspect lock).
 function getContainerSize() {
-  if (canvasContainer && canvasContainer.clientWidth > 0 && canvasContainer.clientHeight > 0) {
-    return { w: canvasContainer.clientWidth, h: canvasContainer.clientHeight };
+  const w = (window.visualViewport ? window.visualViewport.width : window.innerWidth) || 1920;
+  const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight) || 953;
+  const isVertical = h > w;
+
+  if (isVertical) {
+    // Portrait mode: width is capped to fit the 886x1920 aspect, height is capped to (width * 1920 / 886)
+    const containerH = Math.round(Math.min(h, w * (1920 / 886)));
+    const containerW = Math.round(Math.min(w, h * (886 / 1920)));
+    return { w: containerW, h: containerH };
+  } else {
+    // Landscape mode: width is 100%, height is capped to (width * 953 / 1920)
+    const containerW = w;
+    const containerH = Math.round(Math.min(h, w * (953 / 1920)));
+    return { w: containerW, h: containerH };
   }
-  return { w: window.innerWidth, h: window.innerHeight };
 }
 
 // Helper to determine the internal rendering resolution stepped snaps.
@@ -1172,85 +1251,43 @@ function getRenderResolution(containerW, containerH) {
   }
 }
 
-// Helper to scale the HUD components size, offset, and paddings proportionally to container height
-function updateLayoutScale(height) {
-  // Reference height is 900px (Blender design resolution).
-  const scale = height / 900;
+// Helper to scale ALL HUD components proportionally via a single CSS variable.
+// Uses container width (== viewport width) as the reference so the scale is stable
+// even in portrait orientations where height collapses.
+function updateLayoutScale(containerW, containerH) {
+  // At 1920px wide → scale 1.0.  Floor at 0.35 to keep text readable.
+  const scale = Math.max(0.35, containerW / 1920);
+  canvasContainer.style.setProperty('--layout-scale', scale);
 
-  if (hudBrandContainer) {
-    const size = Math.max(15, Math.min(150, 50 * scale));
-    const offset = Math.max(2, Math.min(30, 10 * scale));
-    const fontSize = Math.max(10, Math.min(40, 20 * scale));
-
-    hudBrandContainer.style.setProperty('--hud-icon-size', `${size}px`);
-    hudBrandContainer.style.setProperty('--hud-icon-offset', `${offset}px`);
-    hudBrandContainer.style.setProperty('--hud-font-size', `${fontSize}px`);
-  }
-
-  if (walletConnectWrapper) {
-    const offset = Math.max(2, Math.min(30, 10 * scale));
-    const walletFontSize = 0.9 * scale;
-    const walletPaddingY = Math.max(2, Math.round(8 * scale));
-    const walletPaddingX = Math.max(4, Math.round(18 * scale));
-    const walletBorderWidth = Math.max(1, Math.round(3 * scale));
-    const walletBorderRadius = Math.max(2, Math.round(10 * scale));
-    const walletShadowSize = Math.max(1, Math.round(4 * scale));
-    const walletActiveTranslate = Math.max(1, Math.round(2 * scale));
-    const walletActiveShadow = Math.max(1, Math.round(2 * scale));
-
-    const walletDropdownTop = Math.max(15, Math.round(52 * scale));
-    const walletDropdownWidth = Math.max(100, Math.round(250 * scale));
-    const walletDropdownRadius = Math.max(4, Math.round(16 * scale));
-    const walletDropdownPadding = Math.max(2, Math.round(10 * scale));
-    const walletOptionsPadding = Math.max(2, Math.round(8 * scale));
-    const walletOptionsGap = Math.max(2, Math.round(8 * scale));
-    const walletOptionBorderWidth = Math.max(1, Math.round(2 * scale));
-    const walletOptionRadius = Math.max(2, Math.round(8 * scale));
-    const walletOptionPaddingY = Math.max(2, Math.round(8 * scale));
-    const walletOptionPaddingX = Math.max(4, Math.round(12 * scale));
-    const walletOptionFontSize = 0.8 * scale;
-    const walletEmojiSize = 1.2 * scale;
-    const walletEmojiMargin = Math.max(2, Math.round(8 * scale));
-
-    walletConnectWrapper.style.setProperty('--wallet-offset-x', `${offset}px`);
-    walletConnectWrapper.style.setProperty('--wallet-offset-y', `${offset}px`);
-    walletConnectWrapper.style.setProperty('--wallet-font-size', `${walletFontSize}rem`);
-    walletConnectWrapper.style.setProperty('--wallet-padding-y', `${walletPaddingY}px`);
-    walletConnectWrapper.style.setProperty('--wallet-padding-x', `${walletPaddingX}px`);
-    walletConnectWrapper.style.setProperty('--wallet-border-width', `${walletBorderWidth}px`);
-    walletConnectWrapper.style.setProperty('--wallet-border-radius', `${walletBorderRadius}px`);
-    walletConnectWrapper.style.setProperty('--wallet-shadow-size', `${walletShadowSize}px`);
-    walletConnectWrapper.style.setProperty('--wallet-active-translate', `${walletActiveTranslate}px`);
-    walletConnectWrapper.style.setProperty('--wallet-active-shadow', `${walletActiveShadow}px`);
-
-    walletConnectWrapper.style.setProperty('--wallet-dropdown-top', `${walletDropdownTop}px`);
-    walletConnectWrapper.style.setProperty('--wallet-dropdown-width', `${walletDropdownWidth}px`);
-    walletConnectWrapper.style.setProperty('--wallet-dropdown-radius', `${walletDropdownRadius}px`);
-    walletConnectWrapper.style.setProperty('--wallet-dropdown-padding', `${walletDropdownPadding}px`);
-    walletConnectWrapper.style.setProperty('--wallet-options-padding', `${walletOptionsPadding}px`);
-    walletConnectWrapper.style.setProperty('--wallet-options-gap', `${walletOptionsGap}px`);
-    walletConnectWrapper.style.setProperty('--wallet-option-border-width', `${walletOptionBorderWidth}px`);
-    walletConnectWrapper.style.setProperty('--wallet-option-radius', `${walletOptionRadius}px`);
-    walletConnectWrapper.style.setProperty('--wallet-option-padding', `${walletOptionPaddingY}px ${walletOptionPaddingX}px`);
-    walletConnectWrapper.style.setProperty('--wallet-option-font-size', `${walletOptionFontSize}rem`);
-    walletConnectWrapper.style.setProperty('--wallet-emoji-size', `${walletEmojiSize}rem`);
-    walletConnectWrapper.style.setProperty('--wallet-emoji-margin', `${walletEmojiMargin}px`);
-  }
-
+  // Conch card uses height-based scale for vertical fitting within the container.
   if (askConchOverlay) {
-    const cardScale = Math.max(0.6, Math.min(1.5, scale));
+    const cardScale = Math.max(0.6, Math.min(1.5, containerH / 900));
     askConchOverlay.style.setProperty('--conch-scale', cardScale);
   }
 }
 
 function onWindowResize() {
+  const isVertical = window.innerHeight > window.innerWidth;
+  const targetPath = isVertical ? '/Scene_Vertical.glb' : '/Scene_Desktop.glb';
+  if (currentModelPath !== targetPath) {
+    console.log('[Resize] Orientation changed, reloading model:', targetPath);
+    loadModel(targetPath);
+    return;
+  }
+
   const size = getContainerSize();
   // Dynamic aspect from the actual container dimensions (CSS max-height may constrain height).
   const aspect = (size.h > 0) ? (size.w / size.h) : (1920 / 953);
 
-  // Compute VFOV from the exact Blender HFOV (25.4°) so horizontal framing always matches.
-  const hHalfRad = THREE.MathUtils.degToRad(DESIGN_HFOV_DEG / 2);
-  const vFovDeg = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalfRad) / aspect));
+  const isPortraitModel = currentModelPath && currentModelPath.includes('Vertical');
+  let vFovDeg;
+  if (isPortraitModel) {
+    vFovDeg = 25.36; // Constant Vert+ for portrait camera
+  } else {
+    // Compute VFOV from the exact Blender HFOV (25.4°) so horizontal framing always matches.
+    const hHalfRad = THREE.MathUtils.degToRad(DESIGN_HFOV_DEG / 2);
+    vFovDeg = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalfRad) / aspect));
+  }
   designFov = vFovDeg;
 
   [activeCamera, defaultCamera].forEach(cam => {
@@ -1279,6 +1316,11 @@ function onWindowResize() {
     canvas.style.height = '100%';
   }
 
+  // Update dynamic bokeh blur scale based on render target height to compensate for high DPI/vertical resolutions
+  if (dofUniformBokehScale) {
+    dofUniformBokehScale.value = CONFIG.dofBokehScale * (res.h / 953);
+  }
+
   // Background meshes: reset to original Blender scale. No cover-scaling needed
   // since we don't modify the horizontal FOV.
   if (bgMeshes.length > 0) {
@@ -1288,7 +1330,7 @@ function onWindowResize() {
   }
 
   // Calculate dynamic layout scaling based on container height
-  updateLayoutScale(size.h);
+  updateLayoutScale(size.w, size.h);
 
   // Re-project the UI elements to match the new container size immediately
   updateButtonPosition();
