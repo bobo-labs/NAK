@@ -33,7 +33,7 @@ export const CONFIG = {
   dirLightPosition: { x: 5, y: 10, z: 7 },
 
   // --- GLB embedded lights ---
-  glbLightsIntensityMultiplier: 0.001,
+  glbLightsIntensityMultiplier: 0.0022,
 
   // --- Depth of Field (DepthOfFieldNode – WebGPU/TSL) ---
   enableDoF: true,
@@ -145,6 +145,7 @@ let postProcessing, scenePassNode;
 let dofUniformFocus, dofUniformFocalLength, dofUniformBokehScale;
 let outlineColorNode, outlineThicknessNode, outlineAlphaNode;
 let controls;
+const tablaHudMeshes = [];
 let tablaHudMesh = null;
 
 // ---- Animation ----
@@ -789,9 +790,9 @@ function buildPostProcessing(camera) {
 // 3. LOAD MODEL
 // =============================================================================
 function loadModel(modelPath) {
+  const isVertical = window.innerHeight > window.innerWidth;
   // Determine target model dynamically if not explicitly specified
   if (!modelPath) {
-    const isVertical = window.innerHeight > window.innerWidth;
     modelPath = isVertical ? '/Scene_Vertical.glb' : '/Scene_Desktop.glb';
   }
 
@@ -832,6 +833,7 @@ function loadModel(modelPath) {
 
   // Clear tracking references
   bgMeshes.length = 0;
+  tablaHudMeshes.length = 0;
   pullActions.length = 0;
   cameraAction = null;
   hudPlane = null;
@@ -900,14 +902,19 @@ function loadModel(modelPath) {
           if (child.name.toLowerCase() === 'tabla_hud') {
             tablaHudMesh = child;
           }
+          // Store the mesh and its original Blender scale so we can scale-compensate
+          // on narrow viewports when the HTML scale floor (0.35) is active.
+          tablaHudMeshes.push({
+            mesh: child,
+            origScaleX: child.scale.x,
+            origScaleY: child.scale.y,
+            origScaleZ: child.scale.z
+          });
           // !! Layer 1 ONLY — do NOT keep in layer 0 !!
-          // Using layers.set(1) removes tabla_hud from layer 0 (the main scene pass
-          // that feeds into DoF). This means:
-          //   • DoF never sees or blurs tabla_hud
-          //   • No bokeh from tabla_hud bleeds around it in the DoF output
-          // The hudCamera (layer 1 only, with lights also on layer 1) renders it
-          // correctly lit, and it is composited on top after all DoF/SMAA.
           child.layers.set(1);
+          // Hide the 3D HUD banner completely in all orientations, since we now use
+          // the 2D HTML/CSS background texture (/tablawebp.webp) for both desktop and mobile.
+          child.visible = false;
         }
 
         // Conch shell mesh detection (target for distance calculation)
@@ -1159,7 +1166,7 @@ function onPullFinished() {
   isPulling = false;
   if (conchPullBtn) {
     conchPullBtn.disabled = true;
-    conchPullBtn.querySelector('.wood-btn-text').textContent = 'Oracle Answered';
+    conchPullBtn.querySelector('.wood-btn-text').textContent = 'Conch is answering';
   }
 
   pullActions.forEach(action => action.stop());
@@ -1216,15 +1223,20 @@ function stopIconAnimation() {
 // 6. RESIZE
 // =============================================================================
 function getContainerSize() {
-  const w = (window.visualViewport ? window.visualViewport.width : window.innerWidth) || 1920;
-  const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight) || 953;
+  // Use the CSS layout viewport (window.innerWidth/Height) — NOT visualViewport.
+  // visualViewport.width/height change when the user pinch-zooms, which would
+  // cause the renderer and HUD to rescale. window.innerWidth/Height are the
+  // stable CSS layout dimensions and are unaffected by pinch-zoom.
+  const w = window.innerWidth || 1920;
+  const h = window.innerHeight || 953;
   const isVertical = h > w;
 
   if (isVertical) {
-    // Portrait mode: width is capped to fit the 886x1920 aspect, height is capped to (width * 1920 / 886)
-    const containerH = Math.round(Math.min(h, w * (1920 / 886)));
-    const containerW = Math.round(Math.min(w, h * (886 / 1920)));
-    return { w: containerW, h: containerH };
+    // Portrait mode: return the full viewport so the 3D scene fills the screen
+    // with no black bars. The CSS canvas-container is also max-height/width: 100%
+    // in portrait, so this matches. Three.js sets camera.aspect = w/h and
+    // renderer.setSize(w, h), adapting the scene to the phone's native ratio.
+    return { w: w, h: h };
   } else {
     // Landscape mode: width is 100%, height is capped to (width * 953 / 1920)
     const containerW = w;
@@ -1255,11 +1267,17 @@ function getRenderResolution(containerW, containerH) {
 // Uses container width (== viewport width) as the reference so the scale is stable
 // even in portrait orientations where height collapses.
 function updateLayoutScale(containerW, containerH) {
-  // At 1920px wide → scale 1.0.  Floor at 0.35 to keep text readable.
-  const scale = Math.max(0.35, containerW / 1920);
+  // Derive --layout-scale from the CSS layout viewport width (window.innerWidth).
+  // Using the layout viewport (not visualViewport) makes all UI scale calculations
+  // completely immune to pinch-zoom: the user can zoom in/out without moving or
+  // resizing any HUD element or the 3D scene canvas.
+  const lw = window.innerWidth || 1920;
+  const scale = Math.max(0.35, lw / 1920);
   canvasContainer.style.setProperty('--layout-scale', scale);
 
-  // Conch card uses height-based scale for vertical fitting within the container.
+  // Conch card scale: height-based (matches the original proven formula).
+  // containerH comes from getContainerSize() which already uses window.innerHeight,
+  // so it is also zoom-immune.
   if (askConchOverlay) {
     const cardScale = Math.max(0.6, Math.min(1.5, containerH / 900));
     askConchOverlay.style.setProperty('--conch-scale', cardScale);
@@ -1326,6 +1344,22 @@ function onWindowResize() {
   if (bgMeshes.length > 0) {
     for (const entry of bgMeshes) {
       entry.mesh.scale.set(entry.origScaleX, entry.origScaleY, entry.origScaleZ);
+    }
+  }
+
+  // Adjust 3D scale of the wooden HUD banner components to match the HTML layout scale floor.
+  // When width is narrower than 672px, --layout-scale is capped at 0.35, but the 3D scene
+  // naturally scales down. By scaling up the 3D meshes by the mismatch ratio, they maintain
+  // their design pixel size on screen, keeping the 3D wooden banner perfectly aligned with the
+  // text and buttons.
+  const lw = window.innerWidth || 1920;
+  const actualScale = lw / 1920;
+  const appliedScale = Math.max(0.35, actualScale);
+  const mismatchRatio = appliedScale / actualScale;
+
+  if (tablaHudMeshes.length > 0) {
+    for (const entry of tablaHudMeshes) {
+      entry.mesh.visible = false;
     }
   }
 

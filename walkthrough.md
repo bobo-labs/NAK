@@ -245,3 +245,106 @@ Here are the screenshots demonstrating the dynamic orientation switching, the as
 <!-- slide -->
 ![Mobile Viewport Safe Areas Verified](/safe_areas_verified.png)
 ````
+
+---
+
+## 11. Responsive Scaling Overhaul (Viewport-Relative Fix)
+
+We resolved five compounding bugs that caused the HUD bar, $NAK logo, Connect Wallet button, and Ask the Conch card to scale incorrectly on different phone aspect ratios and when zooming.
+
+### Root Causes Fixed
+
+| Bug | Old Behavior | Fix |
+|:--|:--|:--|
+| **`--layout-scale` used pillarboxed `containerW`** | On phones where the canvas was narrower than the viewport, scale shrank incorrectly | Always use raw `visualViewport.width` (never capped container width) |
+| **`--conch-scale` was height-based in portrait** | Card and HUD used different axes — zooming de-synced them | In portrait, `--conch-scale = vw / 886` (same width axis as `--layout-scale`) |
+| **`--hud-brand-container` used `top: 3.7%` of container** | At small scales where the floor kicks in, the brand sat above the HUD beam center | Pin to `calc(30px × layout-scale)` — exact half of the 60px beam |
+| **Portrait card `--conch-scale-y` formula** | Old `* 0.72` multiplier made card too short when conch-scale moved to width axis | Replaced with `calc(layout-scale × 1.35)` so max-height stays ~330 px on 393 px phones |
+| **Portrait card width base `450px`** | At `vw/886` scale, `450 × 0.44 = 198 px` — narrower than 50 % of viewport | Changed to `886px` base so `min(90%, 886 × vw/886) = min(90%, vw)` always = 90 % |
+
+### Changes Made
+
+In [src/main.js](file:///f:/NAK-MVP/src/main.js):
+1. **`updateLayoutScale()`**: Reads `visualViewport.width/height` directly. Uses `vw / 1920` for `--layout-scale`. In portrait, uses `vw / 886` (floors 0.35) for `--conch-scale`; in landscape, keeps `containerH / 900`.
+
+In [src/style.css](file:///f:/NAK-MVP/src/style.css):
+2. **`.hud-brand-container`** base: `top: 3.7%` → `calc(30px * var(--layout-scale, 1))`. `gap: 12px` → `calc(12px * var(--layout-scale, 1))`.
+3. **Portrait `.canvas-container`**: `max-width` changed from `100vh` to `100svh` (stable viewport height). `--conch-scale-y` changed from `var(--conch-scale) * 0.72` to `var(--layout-scale) * 1.35`.
+4. **Portrait `.hud-brand-container`**: Center point corrected from `57px` → `50.5px * hud-scale` (exact middle of the 101 px wooden beam).
+5. **Portrait `.ask-conch-overlay`**: Width base `450px` → `886px`. Max-height base `480px` → `750px`.
+
+### Verification Results
+
+````carousel
+![iPhone 15 Portrait (500×757)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/iphone_15_portrait_1783462594073.png)
+<!-- slide -->
+![Tablet Portrait (752×929)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/tablet_portrait_1783462656072.png)
+<!-- slide -->
+![Desktop Landscape (1920×953)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/desktop_landscape_1783462684460.png)
+<!-- slide -->
+![Desktop Narrow Portrait (684×705)](C:/Users/Alejandro/.gemini/antigravity-ide/brain/f32141bb-fab8-4389-a986-5cc154cbe2c2/desktop_narrow_1783462710481.png)
+````
+
+---
+
+## 12. Constant Portrait Camera FOV & Dynamic Scroll Container Sizing
+
+To handle screens of different vertical heights in portrait mode without losing or misaligning the 3D HUD banner (`tabla_hud`) and to prevent the Ask the Conch card from getting clipped, we implemented two enhancements:
+
+### A. Restored Constant vertical FOV for Portrait Camera
+* **Problem**: Using Hor+ camera fitting with calculated horizontal angles in portrait mode caused the camera to zoom in on wider/shorter mobile screens. This pushed the 3D wooden banner (`tabla_hud` mesh) completely off-screen, making it disappear.
+* **Fix**: Restored the constant vertical FOV (`25.36°`) inside [src/main.js](file:///f:/NAK-MVP/src/main.js) for `Scene_Vertical.glb`.
+* **Result**: The 3D wooden banner (`tabla_hud` mesh) is back, stays locked exactly at the top of the viewport, and matches the HTML logo/text overlay perfectly across all phone aspect ratios.
+
+### B. Dynamic Scroll Container Height (No Card Clipping)
+* **Problem**: Constraining the max-height of the outer `.ask-conch-overlay` container on shorter screens caused the card to be clipped, cutting off the bottom yellow border and the "BURN" button.
+* **Fix**:
+  1. Set `.ask-conch-overlay` to have a max-height of `calc(500px * var(--conch-scale-y, 1))` to preserve the perfect look on standard screens.
+  2. Applied the dynamic height constraint directly to the **radio group question list container (`.scroll-container`)** inside [src/style.css](file:///f:/NAK-MVP/src/style.css) with an increased safety margin of `380px`:
+     ```css
+     .scroll-container {
+       max-height: min(
+         calc(290px * var(--conch-scale-y, 1)),
+         calc(100svh - calc(calc(200px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - calc(175px * var(--conch-scale-y, 1)) - 380px)
+       );
+     }
+     ```
+* **Result**: The outer card yellow container is **never clipped** and the button is always fully visible with its bottom safe margin. If the screen is short, the list of questions automatically shrinks (starting on any screen height below 760px), activating the internal scrollbar to fit the viewport while leaving exactly `380px` of space for the 3D conch shell below.
+
+### C. Synchronized 3D HUD Banner Scaling (No Shrinking Below Floor)
+* **Problem**: When screen width shrinks below `672px`, the HTML HUD elements (logos, text, and Connect Wallet button) are held constant at a floor scale of `0.35` to preserve legibility. However, the WebGL/WebGPU 3D canvas continues to scale down linearly. This caused the 3D wooden HUD banner (`tabla_hud` meshes) to shrink while the HTML elements overlaying it remained larger, resulting in a layout mismatch.
+* **Fix**: Added dynamic scale compensation in [src/main.js](file:///f:/NAK-MVP/src/main.js). We track all meshes starting with `tabla_hud` in `tablaHudMeshes` and scale them up in 3D by the `appliedScale / actualScale` mismatch ratio during window resize.
+* **Result**: The 3D wooden banner matches the HTML scale floor exactly. It never shrinks below the `0.35` layout scale floor, keeping the wooden banner perfectly aligned behind the text and buttons on narrow viewports.
+
+---
+
+## 13. Unified HUD Navbar: 2D Wooden Banner Background
+
+To completely resolve camera projection and vertical alignment challenges for the HUD banner across all orientations:
+
+* **3D HUD Hide (All Orientations)**: Modified the 3D loader and resize handler in [src/main.js](file:///f:/NAK-MVP/src/main.js) to set `visible = false` on all 3D meshes whose names start with `tabla_hud` for both landscape/desktop and portrait/mobile orientations.
+* **2D HTML Banner Backdrop**: Inside [src/style.css](file:///f:/NAK-MVP/src/style.css), we styled the `.top-hud-bar` element in both global (landscape) rules and portrait media query overrides with the `/tablawebp.webp` background.
+* **Separated Tuning Parameters**: 
+  - Landscape defaults to `height: calc(60px * var(--layout-scale, 1))` and `background-size: 100% 100%`.
+  - Portrait overrides default to `height: calc(calc(101px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px))` and `background-size: 100% 135%`.
+* **Result**: The top navbar scales perfectly dynamically with the HTML logo and button on all screen sizes and ratios, completely free from 3D camera projection and resolution mismatches.
+
+
+---
+
+## 14. Disabled Wood Button Opacity Leak Resolution
+
+To prevent underlying card backgrounds from leaking through the wooden buttons when they are disabled:
+
+* **Removed Container Opacity**: Changed `.wood-btn:disabled` opacity from `0.65` to `1.0` in [src/style.css](file:///f:/NAK-MVP/src/style.css) so the button container remains fully opaque and blocks the background yellow texture from bleeding through the button.
+* **Transparent Background & Texture Alignment**:
+  * Set `background-color: transparent` (instead of `#845226`) on `.wood-btn::before` for both active and disabled states.
+  * Replaced `background-size: 200% 200%` and `background-position: 25% 50%` with `background-size: cover` and `background-position: center`. The old settings zoomed in on the far-left dark/shaded corner of the `/tablawebp.webp` banner render, while the new values align it directly to the lighter, warm-colored middle section of the banner.
+  * Styled the disabled button to use `filter: contrast(0.8) saturate(0.9)` and disabled text to `rgba(255, 255, 255, 0.65)`.
+* **Result**: Both the top navbar and wood buttons now share the exact same warm wood color tones since they display the same regions of the shared `/tablawebp.webp` file.
+
+
+
+
+
+

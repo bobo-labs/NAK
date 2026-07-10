@@ -35,6 +35,10 @@ body {
     linear-gradient(135deg, var(--color-bg-start) 0%, var(--color-bg-mid) 50%, var(--color-bg-end) 100%);
   color: var(--color-text);
   overflow: hidden;
+  /* Prevent native pinch-zoom at the CSS level. The meta viewport
+     user-scalable=no handles most browsers; touch-action: none is the
+     belt-and-suspenders for iOS Safari which ignores that attribute. */
+  touch-action: none;
 }
 
 #app {
@@ -75,11 +79,19 @@ canvas {
 
 /* Full-screen Pre-loader styles */
 .preloader {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  /* position:fixed + inset:0 fills exactly the visual viewport on every browser.
+     The safe-area-inset-* env() variables represent the system UI chrome:
+       top    → status bar (and browser address bar on some platforms)
+       bottom → home indicator / gesture navigation bar
+     By using these as padding, align-items:center automatically centres the
+     spinner within the SAFE area (the part of the screen not obscured by any
+     system UI), on every device and every mobile browser. */
+  position: fixed;
+  inset: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -318,8 +330,16 @@ canvas {
   top: 0;
   left: 0;
   width: 100%;
-  height: calc(60px * var(--layout-scale, 1));
-  background: transparent;
+  height: calc(70px * var(--layout-scale, 1));
+
+  /* --- LANDSCAPE/DESKTOP NAVBAR BACKGROUND --- */
+  /* Tweak these to scale or position the wooden banner texture on desktop */
+  background-image: url('/tablawebp.webp');
+  background-size: 100% 180%;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* ------------------------------------------- */
+
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -353,7 +373,7 @@ canvas {
   position: absolute;
   /* top: 50% + translateY(-50%) pins the button's centre to the bar's centre
      line, which is the same axis as the icon + $NAK text on the left. */
-  top: 56%;
+  top: 47%;
   right: 0;
   transform: translate(calc(-1 * calc(24px * var(--layout-scale, 1))), -50%);
   font-family: var(--font-family), sans-serif;
@@ -488,13 +508,23 @@ canvas {
 .conch-card {
   position: relative;
   width: 100%;
-  height: 100%;
-  background: #ffd635;
-  /* Bright sponge yellow */
+  height: 95%;
+  background-color: #ffd635;
+  background-image: url('/spongebob_textura.jpg');
+
+  /* --- LANDSCAPE/DESKTOP BACKDROP TUNING --- */
+  /* Tweak these to scale or position the texture on desktop */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* ----------------------------------------- */
   border: calc(5px * var(--conch-scale-y, 1)) solid #3c2312;
   /* Cartoon brown border */
   border-radius: calc(28px * var(--conch-scale-y, 1));
-  padding: calc(24px * var(--conch-scale-y, 1)) calc(20px * var(--conch-scale, 1));
+  /* Symmetric padding: equal air above the title and below the button.
+     Top   = 24px (room for title header)
+     Bottom = 16px (tighter — the wood-btn already has its own internal padding+shadow) */
+  padding: calc(24px * var(--conch-scale-y, 1)) calc(20px * var(--conch-scale, 1)) calc(16px * var(--conch-scale-y, 1));
   box-shadow: 0 calc(15px * var(--conch-scale-y, 1)) calc(35px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
@@ -502,11 +532,7 @@ canvas {
 }
 
 .card-spot {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.05);
-  /* Spongebob spots */
-  border-radius: 50%;
-  pointer-events: none;
+  display: none !important;
 }
 
 .spot-1 {
@@ -592,6 +618,9 @@ canvas {
   flex-direction: column;
   gap: calc(10px * var(--conch-scale-y, 1));
   overflow-y: auto;
+  /* Re-enable single-finger vertical scroll inside the card even though the
+     parent body has touch-action: none (which blocks pinch-zoom). */
+  touch-action: pan-y;
   flex-grow: 1;
   box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.4);
 }
@@ -676,6 +705,9 @@ canvas {
   padding: calc(12px * var(--conch-scale-y, 1)) calc(18px * var(--conch-scale, 1));
   cursor: pointer;
   width: 100%;
+  /* Drop-shadow creates the visual 3D offset below the button. The 5px offset
+     means the button 'sits' 5px above the card floor — so the card's bottom
+     padding only needs to clear the shadow, not add extra air. */
   filter: drop-shadow(0 calc(5px * var(--conch-scale-y, 1)) 0px #1a0d07) drop-shadow(0 calc(8px * var(--conch-scale-y, 1)) calc(6px * var(--conch-scale, 1)) rgba(0, 0, 0, 0.35));
   transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
   outline: none;
@@ -683,6 +715,10 @@ canvas {
   display: flex;
   justify-content: center;
   align-items: center;
+  /* Small bottom margin so the drop-shadow doesn't get clipped by the card's
+     overflow:hidden, and so there is visible air between the button and the
+     card's bottom edge in all viewport sizes. */
+  margin-bottom: calc(6px * var(--conch-scale-y, 1));
 }
 
 .wood-btn::before {
@@ -692,11 +728,11 @@ canvas {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #845226;
-  background-image: url('/Tabla.png');
-  background-size: 200% 200%;
+  background-color: transparent;
+  background-image: url('/tablawebp.webp');
+  background-size: cover;
   background-repeat: no-repeat;
-  background-position: 25% 50%;
+  background-position: center;
   box-shadow: inset 0 0 0 calc(3.5px * var(--conch-scale-y, 1)) #1a0d07;
   clip-path: polygon(0% 4%,
       15% 2%,
@@ -738,13 +774,24 @@ canvas {
 }
 
 .wood-btn:disabled {
-  opacity: 0.65;
+  opacity: 1.0;
+  /* Keep fully opaque to block card texture leaks */
   cursor: not-allowed;
 }
 
 .wood-btn:disabled::before {
-  background-color: #6d5b4d;
-  filter: contrast(0.8) brightness(0.8);
+  background-color: transparent;
+  /* Normal active wood color */
+
+  filter:
+    contrast(0.8) saturate(0.9);
+  /* Only desaturate when disabled, no brightness change */
+}
+
+.wood-btn:disabled .wood-btn-text {
+  color: rgba(255, 255, 255, 0.65);
+  /* Faded white text */
+  text-shadow: calc(2px * var(--conch-font-scale, 1)) calc(2px * var(--conch-font-scale, 1)) 0px #1a0d07;
 }
 
 .wood-btn-text {
@@ -1006,18 +1053,20 @@ canvas {
 /* Top-left anchored brand wrapper (Icon + Text) */
 .hud-brand-container {
   position: absolute;
-  /* top: 50% + translateY(-50%) centres the group on the same axis as the
-     wallet button on the right, so icon, $NAK and Connect Wallet all share
-     one horizontal centre line inside the wooden beam bar. */
-  top: 3.7%;
+  /* Pin the element's centre to the middle of the wooden HUD beam.
+     top = half the bar height = 30px × layout-scale. This avoids the
+     fragile 3.7%-of-container-height formula which drifts when the scale
+     floor (0.35) is in effect on narrow screens. */
+  top: calc(37px * var(--layout-scale, 1));
   left: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--layout-scale, 1));
   transform: translate(calc(10px * var(--layout-scale, 1)), -50%);
   z-index: 130;
   /* Place above the transparent top HUD bar (which is 120) */
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
+  pointer-events: auto;
 }
 
 .hud-brand-container.hidden {
@@ -1067,15 +1116,23 @@ canvas {
 /* Portrait/Vertical layout configurations (886x1920 reference) */
 @media (orientation: portrait) {
   .canvas-container {
-    max-height: calc(100vw * 1920 / 886);
-    max-width: calc(100vh * 886 / 1920);
+    /* Fill the full available viewport in portrait — no black bars.
+       Three.js's onWindowResize() updates camera.aspect and renderer.setSize()
+       automatically, so the 3D scene adapts to whatever aspect ratio the phone has.
+       Modern smartphones (9:16 to 9:21) are all close to the 886:1920 design ratio
+       so the scene looks correct without any cropping. */
+    max-height: 100%;
+    max-width: 100%;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     --hud-scale: calc(var(--layout-scale, 1) * 1.35);
-    /* 35% larger HUD bar elements */
+    /* 35% larger HUD bar elements in portrait */
+
+    /* --conch-scale is height-based (containerH/900) — the same proven formula
+       as landscape. *0.72 compresses the card vertically so it fits in portrait.
+       *0.78 keeps fonts proportional. Both formulas are unchanged from the
+       original working design. */
     --conch-scale-y: calc(var(--conch-scale, 1) * 0.72);
-    /* 28% more tiny vertically */
     --conch-font-scale: calc(var(--conch-scale, 1) * 0.78);
-    /* 22% more tiny fonts */
   }
 
   /* Mobile HUD overrides */
@@ -1084,6 +1141,11 @@ canvas {
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: max(env(safe-area-inset-left, 0px), calc(24px * var(--hud-scale, 1)));
     padding-right: max(env(safe-area-inset-right, 0px), calc(24px * var(--hud-scale, 1)));
+    /* Supersede the 3D HUD banner with a high-quality 2D wooden texture background banner */
+    background-image: url('/tablawebp.webp');
+    background-size: 100% 135%;
+    background-repeat: no-repeat;
+    background-position: center;
   }
 
   .hud-logo-text-nak {
@@ -1093,7 +1155,9 @@ canvas {
   }
 
   .hud-brand-container {
-    top: calc(calc(57px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    /* Center in the 101px portrait wooden beam: center = 50.5px × hud-scale.
+       Added safe-area-inset-top so the beam content clears the notch. */
+    top: calc(calc(55px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
     gap: calc(12px * var(--hud-scale, 1));
     transform: translate(calc(10px * var(--hud-scale, 1)), -50%);
   }
@@ -1153,12 +1217,33 @@ canvas {
   }
 
   .ask-conch-overlay {
-    top: calc(calc(185px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    top: calc(calc(200px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+    /* 90% of viewport width, anchored to the 450px design reference scaled by
+       conch-scale (height-based). On a 393px phone: min(90%, 450*0.946)=min(354,426)=354px. */
     width: min(90%, calc(450px * var(--conch-scale, 1)));
     height: auto;
-    max-height: calc(480px * var(--conch-scale-y, 1));
+    /* 500px × 0.92 = 460px: 8% height reduction as requested. */
+    max-height: calc(500px * var(--conch-scale-y, 1));
   }
+
+  /* Shrink the radio question group (.scroll-container) if the phone screen is
+     vertically tight, leaving at least 380px of breathing room for the conch at the bottom.
+     This ensures the 3D conch shell is never overshadowed, while keeping the card container
+     fully intact and unclipped. */
+  .scroll-container {
+    max-height: min(calc(290px * var(--conch-scale-y, 1)),
+        calc(100svh - calc(calc(200px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - calc(175px * var(--conch-scale-y, 1)) - 380px));
+  }
+
+  /* --- PORTRAIT/MOBILE BACKDROP OVERRIDES --- */
+  /* Tweak these to scale or position the texture specifically on mobile phones */
+  .conch-card {
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* ------------------------------------------ */
 }
