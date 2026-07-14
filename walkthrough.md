@@ -353,8 +353,9 @@ To optimize the vertical layout on mobile devices (such as the iPhone 16) and pr
 * **Increased Scale Multipliers**: Changed portrait vertical scale modifiers in [src/style.css](file:///f:/NAK-MVP/src/style.css):
   - `--conch-scale-y` changed from `0.72` to `0.88` to prevent aggressive height squishing.
   - `--conch-font-scale` changed from `0.78` to `0.85` for better text readability.
-* **Updated Scroll Container Bounds**: Increased `.scroll-container` base max-height from `290px` to `320px`, and modified its screen clearance constraint to match the new top offset (`135px`) and a bottom conch safety margin of `390px`.
-* **Result**: The conch card expands naturally to fill the available height on modern tall screens, displaying multiple question choices cleanly while guaranteeing a minimum of 390px of clearance at the bottom of the viewport for the 3D conch shell.
+* **Strict Bottom Safe Zone (`420px` Clearance)**: Refactored height limits to constrain the overlay `.ask-conch-overlay` directly with `max-height: calc(100svh - top - 420px)`. This guarantees a minimum of 420px of unoccupied vertical space at the bottom of the screen to secure the 3D conch shell from overlap.
+* **Flexbox Min-Height Fix**: Added `min-height: 0;` to `.conch-card`, `.card-state-container`, and `.scroll-container`. This resolves a nested CSS flexbox overflow bug (where flex elements default to `min-height: auto` and refuse to shrink below their content size), forcing the list container to shrink gracefully and enable scrolling inside the card.
+* **Result**: The conch card expands naturally to fill tall screens but shrinks reliably on shorter displays to protect the conch safe zone from any visual overlaps.
 
 
 

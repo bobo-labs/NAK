@@ -529,6 +529,7 @@ canvas {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .card-spot {
@@ -568,6 +569,7 @@ canvas {
   flex-direction: column;
   height: 100%;
   z-index: 1;
+  min-height: 0;
 }
 
 .card-state-container.hidden {
@@ -603,7 +605,9 @@ canvas {
   flex-grow: 1;
   margin-bottom: calc(18px * var(--conch-scale-y, 1));
   max-height: calc(290px * var(--conch-scale-y, 1));
+  min-height: 0;
 }
+
 
 .scroll-cap {
   display: none !important;
@@ -1224,25 +1228,22 @@ canvas {
        conch-scale (height-based). On a 393px phone: min(90%, 450*0.946)=min(354,426)=354px. */
     width: min(90%, calc(450px * var(--conch-scale, 1)));
     height: auto;
-    /* Allow card to be taller while maintaining reference limits */
-    max-height: calc(520px * var(--conch-scale-y, 1));
+    /* Limit the entire overlay height to leave exactly 420px of safe space at the bottom for the conch */
+    max-height: calc(100svh - calc(calc(135px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - 420px);
   }
 
-  /* Shrink the radio question group (.scroll-container) if the phone screen is
-     vertically tight, leaving at least 380px of breathing room for the conch at the bottom.
-     This ensures the 3D conch shell is never overshadowed, while keeping the card container
-     fully intact and unclipped. */
   .scroll-container {
-    max-height: min(calc(320px * var(--conch-scale-y, 1)),
-        calc(100svh - calc(calc(135px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - calc(175px * var(--conch-scale-y, 1)) - 390px));
+    max-height: calc(320px * var(--conch-scale-y, 1));
   }
 
   /* --- PORTRAIT/MOBILE BACKDROP OVERRIDES --- */
   /* Tweak these to scale or position the texture specifically on mobile phones */
   .conch-card {
+    height: 100%;
     background-size: cover;
     background-position: center;
   }
+
 
   /* ------------------------------------------ */
 }
