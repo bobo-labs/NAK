@@ -343,6 +343,20 @@ To prevent underlying card backgrounds from leaking through the wooden buttons w
   * Styled the disabled button to use `filter: contrast(0.8) saturate(0.9)` and disabled text to `rgba(255, 255, 255, 0.65)`.
 * **Result**: Both the top navbar and wood buttons now share the exact same warm wood color tones since they display the same regions of the shared `/tablawebp.webp` file.
 
+---
+
+## 15. Mobile Portrait: Conch Card Height & Vertical Spacing Optimization
+
+To optimize the vertical layout on mobile devices (such as the iPhone 16) and prevent the card overlay from appearing too tiny:
+
+* **Pushed Overlay Upward with Comfortable Margin**: Changed `.ask-conch-overlay` `top` offset in portrait mode from `200px` to `135px * var(--hud-scale, 1) + env(safe-area-inset-top)`. This reduces the empty blue gap below the top banner while maintaining a clean, spacious margin.
+* **Increased Scale Multipliers**: Changed portrait vertical scale modifiers in [src/style.css](file:///f:/NAK-MVP/src/style.css):
+  - `--conch-scale-y` changed from `0.72` to `0.88` to prevent aggressive height squishing.
+  - `--conch-font-scale` changed from `0.78` to `0.85` for better text readability.
+* **Updated Scroll Container Bounds**: Increased `.scroll-container` base max-height from `290px` to `320px`, and modified its screen clearance constraint to match the new top offset (`135px`) and a bottom conch safety margin of `390px`.
+* **Result**: The conch card expands naturally to fill the available height on modern tall screens, displaying multiple question choices cleanly while guaranteeing a minimum of 390px of clearance at the bottom of the viewport for the 3D conch shell.
+
+
 
 
 

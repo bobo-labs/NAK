@@ -1128,11 +1128,10 @@ canvas {
     /* 35% larger HUD bar elements in portrait */
 
     /* --conch-scale is height-based (containerH/900) — the same proven formula
-       as landscape. *0.72 compresses the card vertically so it fits in portrait.
-       *0.78 keeps fonts proportional. Both formulas are unchanged from the
-       original working design. */
-    --conch-scale-y: calc(var(--conch-scale, 1) * 0.72);
-    --conch-font-scale: calc(var(--conch-scale, 1) * 0.78);
+       as landscape. *0.88 scales the card vertically for portrait so it fits modern tall phones.
+       *0.85 keeps fonts proportional and highly readable. */
+    --conch-scale-y: calc(var(--conch-scale, 1) * 0.88);
+    --conch-font-scale: calc(var(--conch-scale, 1) * 0.85);
   }
 
   /* Mobile HUD overrides */
@@ -1217,7 +1216,7 @@ canvas {
   }
 
   .ask-conch-overlay {
-    top: calc(calc(200px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
+    top: calc(calc(135px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px));
     right: auto;
     left: 50%;
     transform: translateX(-50%);
@@ -1225,8 +1224,8 @@ canvas {
        conch-scale (height-based). On a 393px phone: min(90%, 450*0.946)=min(354,426)=354px. */
     width: min(90%, calc(450px * var(--conch-scale, 1)));
     height: auto;
-    /* 500px × 0.92 = 460px: 8% height reduction as requested. */
-    max-height: calc(500px * var(--conch-scale-y, 1));
+    /* Allow card to be taller while maintaining reference limits */
+    max-height: calc(520px * var(--conch-scale-y, 1));
   }
 
   /* Shrink the radio question group (.scroll-container) if the phone screen is
@@ -1234,8 +1233,8 @@ canvas {
      This ensures the 3D conch shell is never overshadowed, while keeping the card container
      fully intact and unclipped. */
   .scroll-container {
-    max-height: min(calc(290px * var(--conch-scale-y, 1)),
-        calc(100svh - calc(calc(200px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - calc(175px * var(--conch-scale-y, 1)) - 380px));
+    max-height: min(calc(320px * var(--conch-scale-y, 1)),
+        calc(100svh - calc(calc(135px * var(--hud-scale, 1)) + env(safe-area-inset-top, 0px)) - calc(175px * var(--conch-scale-y, 1)) - 390px));
   }
 
   /* --- PORTRAIT/MOBILE BACKDROP OVERRIDES --- */
