@@ -357,6 +357,30 @@ To optimize the vertical layout on mobile devices (such as the iPhone 16) and pr
 * **Flexbox Min-Height Fix**: Added `min-height: 0;` to `.conch-card`, `.card-state-container`, and `.scroll-container`. This resolves a nested CSS flexbox overflow bug (where flex elements default to `min-height: auto` and refuse to shrink below their content size), forcing the list container to shrink gracefully and enable scrolling inside the card.
 * **Result**: The conch card expands naturally to fill tall screens but shrinks reliably on shorter displays to protect the conch safe zone from any visual overlaps.
 
+---
+
+## 16. Interactive Floating Token Bubbles (Top Gainers & Losers)
+
+To display live market trends in an engaging, underwater-themed visual widget:
+
+* **HTML Structure**: Added `#bubbles-container` in [index.html](file:///f:/NAK-MVP/index.html) immediately after the WebGL canvas.
+* **Buoyancy & Oscillating Physics (Sinusoidal Drift)**: Created layered CSS transitions in [style.css](file:///f:/NAK-MVP/src/style.css):
+  - **Outer Rise Layer (`.bubble-item`)**: Floats up vertically from off-screen bottom to off-screen top (`translateY(0)` to `translateY(calc(-100vh - 200px))`) at a constant linear speed.
+  - **Inner Sway Layer (`.bubble-inner`)**: Alternates sways horizontally back and forth using an `ease-in-out` sinusoidal ease to mimic bubble physics.
+  - **Hover Interactivity**: Nested the hover state to pause both the rise and sway keyframe animations (`animation-play-state: paused`) and scale the token graphic (`transform: scale(1.15)`) smoothly.
+* **DOM Spawning & Multi-Layer z-index**:
+  - Leveraged `z-index: 50` on the container, placing the bubbles in front of the 3D canvas but behind the top wooden banner and Ask the Conch card.
+  - Allowed clicks/hovers on empty spaces to pass through to the 3D scene using `pointer-events: none` on the container and `pointer-events: auto` on bubble elements.
+* **Ecosystem API Integration**:
+  - Implemented `fetchTokenData()` in [main.js](file:///f:/NAK-MVP/src/main.js) to pull active tokens from `icptokens.net` API.
+  - Deduped and filtered out stablecoins, sorted by 24h USD change, and loaded the top 3 gainers and top 3 losers (6 total bubbles).
+  - Used `logo` filenames to construct image sources (`https://icptokens.net/storage/${logo}`) and added an `onerror` fallback.
+  - Added click navigation to open token details in new tabs.
+  - Integrated robust error handling with pre-configured static fallbacks (using the default logo Frame) if the network is offline.
+  - Solved race conditions using an `isBenchmarkFinished` synchronization flag so bubbles spawn automatically at the end of the preloader entrance animation.
+* **Result**: The portal features interactive, floating bubble price indicators that float up in non-uniform waves, pause on hover, navigate on click, and maintain perfect layer depth.
+
+
 
 
 

@@ -1247,3 +1247,114 @@ canvas {
 
   /* ------------------------------------------ */
 }
+
+/* =============================================================================
+   16. FLOATING BUBBLES WIDGET
+   ============================================================================= */
+.bubbles-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50; /* Above WebGL canvas, below top-hud-bar (120) and overlay (100) */
+  overflow: hidden;
+}
+
+/* Outer bubble element handles vertical rise animation */
+.bubble-item {
+  position: absolute;
+  bottom: -150px; /* start fully off-screen */
+  animation: floatUp 15s linear infinite;
+  will-change: transform;
+}
+
+/* Inner bubble element handles horizontal sinusoidal sway animation */
+.bubble-inner {
+  animation: sway 4s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Content container displays logo, ticker, and percent change inside bubble graphic */
+.bubble-content {
+  width: 100%;
+  height: 100%;
+  background-image: url('/bubbles/bubble_normal.webp');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  text-align: center;
+  padding: 18%;
+  cursor: pointer;
+  pointer-events: auto; /* enable interactions on the bubble itself */
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.15s ease;
+  user-select: none;
+}
+
+.bubble-content:hover {
+  transform: scale(1.15);
+  filter: brightness(1.1) drop-shadow(0 8px 16px rgba(0, 200, 255, 0.4));
+}
+
+/* Pause keyframe animations on hover */
+.bubble-item:hover,
+.bubble-item:hover .bubble-inner {
+  animation-play-state: paused;
+}
+
+/* Layout content inside bubble */
+.bubble-ticker {
+  font-family: var(--font-family), sans-serif;
+  font-size: clamp(10px, calc(13px * var(--layout-scale, 1)), 16px);
+  font-weight: 800;
+  color: #1a0d07;
+  text-transform: uppercase;
+  margin-bottom: calc(2px * var(--layout-scale, 1));
+}
+
+.bubble-logo {
+  width: calc(24px * var(--layout-scale, 1));
+  height: calc(24px * var(--layout-scale, 1));
+  border-radius: 50%;
+  border: calc(1.5px * var(--layout-scale, 1)) solid #3c2312;
+  object-fit: cover;
+  background-color: #fff;
+  margin-bottom: calc(2px * var(--layout-scale, 1));
+}
+
+.bubble-change {
+  font-family: var(--font-family), sans-serif;
+  font-size: clamp(9px, calc(11px * var(--layout-scale, 1)), 14px);
+  font-weight: 700;
+  text-shadow: 1px 1px 0px #fff;
+}
+
+.bubble-change.gainer {
+  color: #0b933a; /* Coral/sponge cartoon green */
+}
+
+.bubble-change.loser {
+  color: #c91a1a; /* Coral/sponge cartoon red */
+}
+
+/* Animation Keyframes */
+@keyframes floatUp {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(calc(-100vh - 200px)); /* floats up past top of screen */
+  }
+}
+
+@keyframes sway {
+  0% {
+    transform: translateX(calc(-1 * calc(25px * var(--layout-scale, 1))));
+  }
+  100% {
+    transform: translateX(calc(25px * var(--layout-scale, 1)));
+  }
+}

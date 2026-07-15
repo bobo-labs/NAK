@@ -211,6 +211,10 @@ let hudPlane = null;
 let currentModelPath = null;
 let loadedModelGroup = null;
 
+// ---- Floating Token Bubbles Data ----
+let tokenBubblesData = [];
+let isBenchmarkFinished = false;
+
 // ---- Target objects for calculations ----
 let conchMesh = null;
 
@@ -550,6 +554,9 @@ async function init() {
 
   // --- Load GLB ---
   loadModel();
+
+  // --- Fetch Token Data for Floating Bubbles ---
+  fetchTokenData();
 
   // --- Events ---
   // Debounced resize: dragging the window edge fires dozens of events per second.
@@ -1440,6 +1447,12 @@ function finishBenchmarking() {
 
   // Hide loading screen smoothly
   setProgress(100, 'Connected!');
+
+  isBenchmarkFinished = true;
+
+  // Spawn the gainers and losers bubbles
+  spawnBubbles();
+
   if (preloader) {
     preloader.classList.add('fade-out');
     setTimeout(() => {
@@ -1536,6 +1549,163 @@ function animate() {
 
 
 // =============================================================================
+// 9. FLOATING BUBBLES WIDGET LOGIC
+// =============================================================================
+async function fetchTokenData() {
+  try {
+    const response = await fetch('https://icptokens.net/api/tokens');
+    if (!response.ok) throw new Error('API response not ok');
+    const data = await response.json();
+
+    // Filter valid tokens
+    const validTokens = data.filter(token => {
+      return token.is_published === true &&
+             token.is_deprecated !== true &&
+             token.metrics &&
+             token.metrics.change &&
+             token.metrics.change['24h'] &&
+             typeof token.metrics.change['24h'].usd === 'number' &&
+             token.logo &&
+             token.symbol;
+    });
+
+    // Filter out stablecoins or base coins to keep it to active ecosystem tokens
+    const filteredTokens = validTokens.filter(token => {
+      const sym = token.symbol.toUpperCase();
+      return sym !== 'ICP' && sym !== 'USDT' && sym !== 'USDC' && sym !== 'CKUSDT' && sym !== 'CKUSDC';
+    });
+
+    // Sort by 24h USD change descending
+    const sorted = [...filteredTokens].sort((a, b) => b.metrics.change['24h'].usd - a.metrics.change['24h'].usd);
+
+    if (sorted.length < 6) throw new Error('Not enough tokens');
+
+    const gainers = sorted.slice(0, 3);
+    const losers = sorted.slice(-3); // last 3 are the biggest losers
+
+    tokenBubblesData = [
+      ...gainers.map(t => ({ symbol: t.symbol, logo: t.logo, change: t.metrics.change['24h'].usd, isGainer: true, canisterId: t.canister_id })),
+      ...losers.map(t => ({ symbol: t.symbol, logo: t.logo, change: t.metrics.change['24h'].usd, isGainer: false, canisterId: t.canister_id }))
+    ];
+
+    console.log('[Bubbles] Loaded tokens from API:', tokenBubblesData);
+  } catch (err) {
+    console.warn('[Bubbles] Failed to fetch token data, using fallbacks:', err);
+    // Predefined fallbacks
+    tokenBubblesData = [
+      { symbol: 'NAK', logo: 'nak_logo.png', change: 24.5, isGainer: true, localLogo: true },
+      { symbol: 'EXE', logo: 'exe_logo.png', change: 12.8, isGainer: true, localLogo: true },
+      { symbol: 'CHAT', logo: 'chat_logo.png', change: 8.2, isGainer: true, localLogo: true },
+      { symbol: 'GHOST', logo: 'ghost_logo.png', change: -5.4, isGainer: false, localLogo: true },
+      { symbol: 'OGY', logo: 'ogy_logo.png', change: -8.9, isGainer: false, localLogo: true },
+      { symbol: 'BOB', logo: 'bob_logo.png', change: -15.2, isGainer: false, localLogo: true }
+    ];
+  } finally {
+    if (isBenchmarkFinished) {
+      spawnBubbles();
+    }
+  }
+}
+
+function spawnBubbles() {
+  if (!isBenchmarkFinished) return;
+
+  const container = document.getElementById('bubbles-container');
+  if (!container) return;
+
+  // Clear any existing bubbles
+  container.innerHTML = '';
+
+  if (tokenBubblesData.length === 0) {
+    console.warn('[Bubbles] No token data available to spawn bubbles.');
+    return;
+  }
+
+  tokenBubblesData.forEach((token, index) => {
+    // Create outer bubble-item
+    const bubbleItem = document.createElement('div');
+    bubbleItem.className = 'bubble-item';
+
+    // Create inner bubble-inner
+    const bubbleInner = document.createElement('div');
+    bubbleInner.className = 'bubble-inner';
+
+    // Create content wrapper
+    const bubbleContent = document.createElement('div');
+    bubbleContent.className = 'bubble-content';
+
+    // Randomize properties:
+    // 1. Size between 80px and 115px
+    const size = Math.floor(Math.random() * 35) + 80;
+    bubbleItem.style.width = `${size}px`;
+    bubbleItem.style.height = `${size}px`;
+
+    // 2. Horizontal starting position (left offset) between 5% and 85%
+    // Distribute them slightly depending on their index to prevent cluster overlap
+    const sectionWidth = 80 / tokenBubblesData.length;
+    const leftPos = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
+    bubbleItem.style.left = `${leftPos}%`;
+
+    // 3. Vertical rise animation duration between 12s and 20s
+    const floatDuration = Math.random() * 8 + 12;
+    bubbleItem.style.animationDuration = `${floatDuration}s`;
+
+    // 4. Horizontal sway animation duration between 3s and 6s
+    const swayDuration = Math.random() * 3 + 3;
+    bubbleInner.style.animationDuration = `${swayDuration}s`;
+
+    // 5. Negative animation delay so they start immediately at different heights
+    const delay = -Math.random() * floatDuration;
+    bubbleItem.style.animationDelay = `${delay}s`;
+    
+    // Random delay for horizontal sway as well to prevent in-sync swaying
+    const swayDelay = -Math.random() * swayDuration;
+    bubbleInner.style.animationDelay = `${swayDelay}s`;
+
+    // Build internal elements
+    // Ticker symbol
+    const ticker = document.createElement('div');
+    ticker.className = 'bubble-ticker';
+    ticker.textContent = token.symbol.startsWith('$') ? token.symbol : `$${token.symbol}`;
+
+    // Token Logo
+    const logo = document.createElement('img');
+    logo.className = 'bubble-logo';
+    logo.src = token.localLogo ? '/icon%2050x50/0001.webp' : `https://icptokens.net/storage/${token.logo}`;
+    logo.alt = token.symbol;
+    // Fallback if image fails to load
+    logo.onerror = () => {
+      logo.src = '/icon%2050x50/0001.webp';
+    };
+
+    // Percentage change
+    const change = document.createElement('div');
+    const isGainer = token.isGainer;
+    change.className = `bubble-change ${isGainer ? 'gainer' : 'loser'}`;
+    const formattedChange = token.change > 0 ? `+${token.change.toFixed(1)}%` : `${token.change.toFixed(1)}%`;
+    change.textContent = formattedChange;
+
+    // Click event to navigate to token details page
+    bubbleContent.addEventListener('click', () => {
+      const url = token.canisterId 
+        ? `https://icptokens.net/token/${token.canisterId}` 
+        : `https://icptokens.net/`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+
+    // Assemble
+    bubbleContent.appendChild(ticker);
+    bubbleContent.appendChild(logo);
+    bubbleContent.appendChild(change);
+
+    bubbleInner.appendChild(bubbleContent);
+    bubbleItem.appendChild(bubbleInner);
+    container.appendChild(bubbleItem);
+  });
+}
+
+// =============================================================================
 // START
 // =============================================================================
 init();
+
