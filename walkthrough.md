@@ -372,13 +372,13 @@ To display live market trends in an engaging, underwater-themed visual widget:
   - Leveraged `z-index: 50` on the container, placing the bubbles in front of the 3D canvas but behind the top wooden banner and Ask the Conch card.
   - Allowed clicks/hovers on empty spaces to pass through to the 3D scene using `pointer-events: none` on the container and `pointer-events: auto` on bubble elements.
 * **Ecosystem API Integration**:
-  - Implemented `fetchTokenData()` in [main.js](file:///f:/NAK-MVP/src/main.js) to pull active tokens from `icptokens.net` API.
-  - Deduped and filtered out stablecoins, sorted by 24h USD change, and loaded the top 3 gainers and top 3 losers (6 total bubbles).
-  - Used `logo` filenames to construct image sources (`https://icptokens.net/storage/${logo}`) and added an `onerror` fallback.
-  - Added click navigation to open token details in new tabs.
-  - Integrated robust error handling with pre-configured static fallbacks (using the default logo Frame) if the network is offline.
+  - Implemented `fetchTokenData()` in [main.js](file:///f:/NAK-MVP/src/main.js) to pull active token pools from GeckoTerminal (`https://api.geckoterminal.com/api/v2/networks/icp/pools?page=1&include=base_token`), bypassing client-side CORS issues.
+  - Deduped and filtered out stablecoins/base pairs, sorted by 24h USD change, and retrieved the top 3 gainers and top 3 losers (6 total bubbles).
+  - Mapped base token IDs to CoinGecko image URLs via the included token relationship objects, with a robust fallback to our local logo `/icon%2050x50/0001.webp` on any loading errors.
+  - Added click navigation to open the token pair's GeckoTerminal chart page.
+  - Integrated robust error handling with static fallback mock arrays if the API is rate-limited.
   - Solved race conditions using an `isBenchmarkFinished` synchronization flag so bubbles spawn automatically at the end of the preloader entrance animation.
-* **Result**: The portal features interactive, floating bubble price indicators that float up in non-uniform waves, pause on hover, navigate on click, and maintain perfect layer depth.
+* **Result**: The portal features interactive, floating bubble price indicators that float up in non-uniform waves, pause on hover, navigate to pair charts on click, display live CoinGecko icons, and maintain perfect layer depth.
 
 
 

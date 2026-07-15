@@ -1310,9 +1310,16 @@ canvas {
   font-family: var(--font-family), sans-serif;
   font-size: clamp(10px, calc(13px * var(--layout-scale, 1)), 16px);
   font-weight: 800;
-  color: #1a0d07;
   text-transform: uppercase;
   margin-bottom: calc(2px * var(--layout-scale, 1));
+}
+
+.bubble-ticker.gainer {
+  color: #0b933a;
+}
+
+.bubble-ticker.loser {
+  color: #c91a1a;
 }
 
 .bubble-logo {
@@ -1329,7 +1336,6 @@ canvas {
   font-family: var(--font-family), sans-serif;
   font-size: clamp(9px, calc(11px * var(--layout-scale, 1)), 14px);
   font-weight: 700;
-  text-shadow: 1px 1px 0px #fff;
 }
 
 .bubble-change.gainer {

@@ -1547,64 +1547,193 @@ function animate() {
   }
 }
 
+const fetchWithTimeout = (url, timeout = 3500) => {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Request timed out'));
+    }, timeout);
+
+    fetch(url, { signal: controller.signal })
+      .then(res => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+};
 
 // =============================================================================
 // 9. FLOATING BUBBLES WIDGET LOGIC
 // =============================================================================
 async function fetchTokenData() {
+  // 1. Try local Vite proxy first (bypasses client-side CORS during local dev/testing)
   try {
-    const response = await fetch('https://icptokens.net/api/tokens');
-    if (!response.ok) throw new Error('API response not ok');
+    const response = await fetchWithTimeout('/api-icp/api/tokens', 3000);
+    if (!response.ok) throw new Error('Proxy response not ok');
+    const data = await response.json();
+    processIcpTokensData(data);
+    console.log('[Bubbles] Loaded tokens from icptokens.net (via local proxy):', tokenBubblesData);
+    if (isBenchmarkFinished) {
+      spawnBubbles();
+    }
+    return;
+  } catch (err) {
+    console.warn('[Bubbles] Local proxy failed, trying public CORS proxy:', err);
+  }
+
+  // 2. Try raw public CORS proxy as secondary fallback
+  try {
+    const response = await fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://icptokens.net/api/tokens'), 4000);
+    if (!response.ok) throw new Error('AllOrigins response not ok');
+    const data = await response.json();
+    processIcpTokensData(data);
+    console.log('[Bubbles] Loaded tokens from icptokens.net (via AllOrigins proxy):', tokenBubblesData);
+    if (isBenchmarkFinished) {
+      spawnBubbles();
+    }
+    return;
+  } catch (err) {
+    console.warn('[Bubbles] Public CORS proxy failed, trying GeckoTerminal fallback:', err);
+  }
+
+  // 3. Fall back to GeckoTerminal if icptokens.net is completely unreachable
+  try {
+    const response = await fetchWithTimeout('https://api.geckoterminal.com/api/v2/networks/icp/pools?page=1&include=base_token', 4000);
+    if (!response.ok) throw new Error('GeckoTerminal response not ok');
     const data = await response.json();
 
-    // Filter valid tokens
-    const validTokens = data.filter(token => {
-      return token.is_published === true &&
-             token.is_deprecated !== true &&
-             token.metrics &&
-             token.metrics.change &&
-             token.metrics.change['24h'] &&
-             typeof token.metrics.change['24h'].usd === 'number' &&
-             token.logo &&
-             token.symbol;
+    const logoMap = {};
+    if (data.included) {
+      data.included.forEach(item => {
+        if (item.attributes && item.attributes.image_url) {
+          logoMap[item.id] = item.attributes.image_url;
+        }
+      });
+    }
+
+    const seenTokens = new Set();
+    const uniquePools = [];
+    data.data.forEach(pool => {
+      const baseTokenId = pool.relationships.base_token.data.id;
+      const baseSymbol = pool.attributes.name.split(' / ')[0].toUpperCase();
+      const change24h = pool.attributes.price_change_percentage.h24;
+      
+      if (
+        !seenTokens.has(baseTokenId) &&
+        change24h !== null &&
+        change24h !== undefined &&
+        baseSymbol !== 'ICP' &&
+        baseSymbol !== 'USDT' &&
+        baseSymbol !== 'USDC' &&
+        baseSymbol !== 'CKUSDT' &&
+        baseSymbol !== 'CKUSDC'
+      ) {
+        seenTokens.add(baseTokenId);
+        uniquePools.push(pool);
+      }
     });
 
-    // Filter out stablecoins or base coins to keep it to active ecosystem tokens
-    const filteredTokens = validTokens.filter(token => {
-      const sym = token.symbol.toUpperCase();
-      return sym !== 'ICP' && sym !== 'USDT' && sym !== 'USDC' && sym !== 'CKUSDT' && sym !== 'CKUSDC';
+    const sorted = [...uniquePools].sort((a, b) => {
+      const aChange = parseFloat(a.attributes.price_change_percentage.h24) || 0;
+      const bChange = parseFloat(b.attributes.price_change_percentage.h24) || 0;
+      return bChange - aChange;
     });
 
-    // Sort by 24h USD change descending
-    const sorted = [...filteredTokens].sort((a, b) => b.metrics.change['24h'].usd - a.metrics.change['24h'].usd);
+    if (sorted.length < 6) throw new Error('Not enough unique tokens returned');
 
-    if (sorted.length < 6) throw new Error('Not enough tokens');
+    const gainers = sorted.slice(0, 3).map(pool => {
+      const baseTokenId = pool.relationships.base_token.data.id;
+      const symbol = pool.attributes.name.split(' / ')[0];
+      const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
+      const logo = logoMap[baseTokenId] || null;
+      return { 
+        symbol, 
+        logo, 
+        change, 
+        isGainer: true, 
+        url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
+      };
+    });
 
-    const gainers = sorted.slice(0, 3);
-    const losers = sorted.slice(-3); // last 3 are the biggest losers
+    const losers = sorted.slice(-3).map(pool => {
+      const baseTokenId = pool.relationships.base_token.data.id;
+      const symbol = pool.attributes.name.split(' / ')[0];
+      const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
+      const logo = logoMap[baseTokenId] || null;
+      return { 
+        symbol, 
+        logo, 
+        change, 
+        isGainer: false, 
+        url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
+      };
+    });
 
-    tokenBubblesData = [
-      ...gainers.map(t => ({ symbol: t.symbol, logo: t.logo, change: t.metrics.change['24h'].usd, isGainer: true, canisterId: t.canister_id })),
-      ...losers.map(t => ({ symbol: t.symbol, logo: t.logo, change: t.metrics.change['24h'].usd, isGainer: false, canisterId: t.canister_id }))
-    ];
-
-    console.log('[Bubbles] Loaded tokens from API:', tokenBubblesData);
+    tokenBubblesData = [...gainers, ...losers];
+    console.log('[Bubbles] Loaded tokens from GeckoTerminal:', tokenBubblesData);
   } catch (err) {
-    console.warn('[Bubbles] Failed to fetch token data, using fallbacks:', err);
-    // Predefined fallbacks
+    console.warn('[Bubbles] Failed to fetch token data, using static fallbacks:', err);
     tokenBubblesData = [
-      { symbol: 'NAK', logo: 'nak_logo.png', change: 24.5, isGainer: true, localLogo: true },
-      { symbol: 'EXE', logo: 'exe_logo.png', change: 12.8, isGainer: true, localLogo: true },
-      { symbol: 'CHAT', logo: 'chat_logo.png', change: 8.2, isGainer: true, localLogo: true },
-      { symbol: 'GHOST', logo: 'ghost_logo.png', change: -5.4, isGainer: false, localLogo: true },
-      { symbol: 'OGY', logo: 'ogy_logo.png', change: -8.9, isGainer: false, localLogo: true },
-      { symbol: 'BOB', logo: 'bob_logo.png', change: -15.2, isGainer: false, localLogo: true }
+      { symbol: 'NAK', logo: null, change: 24.5, isGainer: true },
+      { symbol: 'EXE', logo: null, change: 12.8, isGainer: true },
+      { symbol: 'CHAT', logo: null, change: 8.2, isGainer: true },
+      { symbol: 'GHOST', logo: null, change: -5.4, isGainer: false },
+      { symbol: 'OGY', logo: null, change: -8.9, isGainer: false },
+      { symbol: 'BOB', logo: null, change: -15.2, isGainer: false }
     ];
   } finally {
     if (isBenchmarkFinished) {
       spawnBubbles();
     }
   }
+}
+
+function processIcpTokensData(data) {
+  // Filter valid tokens using loose comparison for numerical flags (1/0) from API
+  const validTokens = data.filter(token => {
+    return token.is_published == 1 &&
+           token.is_deprecated != 1 &&
+           token.metrics &&
+           token.metrics.change &&
+           token.metrics.change['24h'] &&
+           typeof token.metrics.change['24h'].usd === 'number' &&
+           token.logo &&
+           token.symbol;
+  });
+
+  // Filter out stablecoins or base coins to keep it to active ecosystem tokens
+  const filteredTokens = validTokens.filter(token => {
+    const sym = token.symbol.toUpperCase();
+    return sym !== 'ICP' && sym !== 'USDT' && sym !== 'USDC' && sym !== 'CKUSDT' && sym !== 'CKUSDC';
+  });
+
+  // Sort by 24h USD change descending
+  const sorted = [...filteredTokens].sort((a, b) => b.metrics.change['24h'].usd - a.metrics.change['24h'].usd);
+
+  if (sorted.length < 6) throw new Error('Not enough tokens');
+
+  const gainers = sorted.slice(0, 3).map(t => ({
+    symbol: t.symbol,
+    logo: `https://icptokens.net/storage/${t.logo}`,
+    change: t.metrics.change['24h'].usd,
+    isGainer: true,
+    url: `https://icptokens.net/token/${t.canister_id}`
+  }));
+
+  const losers = sorted.slice(-3).map(t => ({
+    symbol: t.symbol,
+    logo: `https://icptokens.net/storage/${t.logo}`,
+    change: t.metrics.change['24h'].usd,
+    isGainer: false,
+    url: `https://icptokens.net/token/${t.canister_id}`
+  }));
+
+  tokenBubblesData = [...gainers, ...losers];
 }
 
 function spawnBubbles() {
@@ -1665,13 +1794,14 @@ function spawnBubbles() {
     // Build internal elements
     // Ticker symbol
     const ticker = document.createElement('div');
-    ticker.className = 'bubble-ticker';
+    const isGainer = token.isGainer;
+    ticker.className = `bubble-ticker ${isGainer ? 'gainer' : 'loser'}`;
     ticker.textContent = token.symbol.startsWith('$') ? token.symbol : `$${token.symbol}`;
 
     // Token Logo
     const logo = document.createElement('img');
     logo.className = 'bubble-logo';
-    logo.src = token.localLogo ? '/icon%2050x50/0001.webp' : `https://icptokens.net/storage/${token.logo}`;
+    logo.src = token.logo ? token.logo : '/icon%2050x50/0001.webp';
     logo.alt = token.symbol;
     // Fallback if image fails to load
     logo.onerror = () => {
@@ -1680,16 +1810,13 @@ function spawnBubbles() {
 
     // Percentage change
     const change = document.createElement('div');
-    const isGainer = token.isGainer;
     change.className = `bubble-change ${isGainer ? 'gainer' : 'loser'}`;
     const formattedChange = token.change > 0 ? `+${token.change.toFixed(1)}%` : `${token.change.toFixed(1)}%`;
     change.textContent = formattedChange;
 
     // Click event to navigate to token details page
     bubbleContent.addEventListener('click', () => {
-      const url = token.canisterId 
-        ? `https://icptokens.net/token/${token.canisterId}` 
-        : `https://icptokens.net/`;
+      const url = token.url ? token.url : `https://icptokens.net/`;
       window.open(url, '_blank', 'noopener,noreferrer');
     });
 
