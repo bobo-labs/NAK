@@ -1633,7 +1633,7 @@ async function fetchTokenData() {
       const baseTokenId = pool.relationships.base_token.data.id;
       const baseSymbol = pool.attributes.name.split(' / ')[0].toUpperCase();
       const change24h = pool.attributes.price_change_percentage.h24;
-      
+
       if (
         !seenTokens.has(baseTokenId) &&
         change24h !== null &&
@@ -1662,11 +1662,11 @@ async function fetchTokenData() {
       const symbol = pool.attributes.name.split(' / ')[0];
       const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
       const logo = logoMap[baseTokenId] || null;
-      return { 
-        symbol, 
-        logo, 
-        change, 
-        isGainer: true, 
+      return {
+        symbol,
+        logo,
+        change,
+        isGainer: true,
         url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
       };
     });
@@ -1676,11 +1676,11 @@ async function fetchTokenData() {
       const symbol = pool.attributes.name.split(' / ')[0];
       const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
       const logo = logoMap[baseTokenId] || null;
-      return { 
-        symbol, 
-        logo, 
-        change, 
-        isGainer: false, 
+      return {
+        symbol,
+        logo,
+        change,
+        isGainer: false,
         url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
       };
     });
@@ -1708,13 +1708,13 @@ function processIcpTokensData(data) {
   // Filter valid tokens using loose comparison for numerical flags (1/0) from API
   const validTokens = data.filter(token => {
     return token.is_published == 1 &&
-           token.is_deprecated != 1 &&
-           token.metrics &&
-           token.metrics.change &&
-           token.metrics.change['24h'] &&
-           typeof token.metrics.change['24h'].usd === 'number' &&
-           token.logo &&
-           token.symbol;
+      token.is_deprecated != 1 &&
+      token.metrics &&
+      token.metrics.change &&
+      token.metrics.change['24h'] &&
+      typeof token.metrics.change['24h'].usd === 'number' &&
+      token.logo &&
+      token.symbol;
   });
 
   // Filter out stablecoins or base coins to keep it to active ecosystem tokens
@@ -1801,9 +1801,9 @@ function spawnBubbles() {
     }
 
     // Randomize properties:
-    // 1. Size: 145px for promo bubble (Noticeably larger! Normal is 80px to 115px)
+    // 1. Size: 150px for promo bubble (Noticeably larger! Normal is 80px to 115px)
     const size = token.isPromo 
-      ? 145 
+      ? 150 
       : Math.floor(Math.random() * 35) + 80;
     bubbleItem.style.width = `${size}px`;
     bubbleItem.style.height = `${size}px`;
@@ -1820,6 +1820,18 @@ function spawnBubbles() {
     }
     bubbleItem.style.left = `${leftPos}%`;
 
+    // Listen to the animationiteration event to randomize X coordinate each time it loops off-screen
+    bubbleItem.addEventListener('animationiteration', () => {
+      let newLeft;
+      if (token.isPromo) {
+        newLeft = Math.floor(Math.random() * 80) + 5;
+      } else {
+        const sectionWidth = 80 / bubblesToSpawn.length;
+        newLeft = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
+      }
+      bubbleItem.style.left = `${newLeft}%`;
+    });
+
     // 3. Vertical rise animation duration between 12s and 20s
     const floatDuration = Math.random() * 8 + 12;
     bubbleItem.style.animationDuration = `${floatDuration}s`;
@@ -1831,7 +1843,7 @@ function spawnBubbles() {
     // 5. Negative animation delay so they start immediately at different heights
     const delay = -Math.random() * floatDuration;
     bubbleItem.style.animationDelay = `${delay}s`;
-    
+
     // Random delay for horizontal sway as well to prevent in-sync swaying
     const swayDelay = -Math.random() * swayDuration;
     bubbleInner.style.animationDelay = `${swayDelay}s`;
