@@ -1259,17 +1259,16 @@ canvas {
   overflow: hidden;
 }
 
-/* Outer bubble element handles vertical rise animation */
+/* Outer bubble element driven by JS physics loop */
 .bubble-item {
   position: absolute;
-  bottom: -350px; /* start fully off-screen (fits up to 300px promo bubble) */
-  animation: floatUp 15s linear infinite;
+  top: 0;
+  left: 0;
   will-change: transform;
 }
 
-/* Inner bubble element handles horizontal sinusoidal sway animation */
+/* Inner bubble element */
 .bubble-inner {
-  animation: sway 4s ease-in-out infinite alternate;
   will-change: transform;
 }
 
@@ -1320,11 +1319,6 @@ canvas {
   }
 }
 
-/* Pause keyframe animations on hover */
-.bubble-item:hover,
-.bubble-item:hover .bubble-inner {
-  animation-play-state: paused;
-}
 
 /* Layout content inside bubble */
 .bubble-ticker {
@@ -1365,21 +1359,4 @@ canvas {
   color: #c91a1a; /* Coral/sponge cartoon red */
 }
 
-/* Animation Keyframes */
-@keyframes floatUp {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(calc(-100vh - 400px)); /* floats up past top of screen */
-  }
-}
-
-@keyframes sway {
-  0% {
-    transform: translateX(calc(-1 * calc(25px * var(--layout-scale, 1))));
-  }
-  100% {
-    transform: translateX(calc(25px * var(--layout-scale, 1)));
-  }
-}
+

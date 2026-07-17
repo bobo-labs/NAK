@@ -226,6 +226,11 @@ const bubble_promo = {
   isPromo: true
 };
 
+// ---- Bubble Physics Engine variables ----
+let activeBubbles = [];
+let physicsAnimationId = null;
+let lastTime = 0;
+
 // ---- Target objects for calculations ----
 let conchMesh = null;
 
@@ -1763,8 +1768,13 @@ function spawnBubbles() {
   const container = document.getElementById('bubbles-container');
   if (!container) return;
 
-  // Clear any existing bubbles
+  // Clear any existing bubbles and stop previous loops
   container.innerHTML = '';
+  activeBubbles = [];
+  if (physicsAnimationId) {
+    cancelAnimationFrame(physicsAnimationId);
+    physicsAnimationId = null;
+  }
 
   const bubblesToSpawn = [...tokenBubblesData];
   if (bubble_promo && bubble_promo.enabled) {
@@ -1784,6 +1794,9 @@ function spawnBubbles() {
     return;
   }
 
+  const containerWidth = container.clientWidth || window.innerWidth;
+  const containerHeight = container.clientHeight || window.innerHeight;
+
   bubblesToSpawn.forEach((token, index) => {
     // Create outer bubble-item
     const bubbleItem = document.createElement('div');
@@ -1800,56 +1813,53 @@ function spawnBubbles() {
       bubbleContent.classList.add('promo');
     }
 
-    // Randomize properties:
-    // 1. Size: 150px for promo bubble (Noticeably larger! Normal is 80px to 115px)
-    const size = token.isPromo
-      ? 300
+    // Determine size
+    const size = token.isPromo 
+      ? 300 
       : Math.floor(Math.random() * 35) + 80;
+    
+    // Set style dimensions
+    bubbleItem.style.position = 'absolute';
+    bubbleItem.style.left = '0';
+    bubbleItem.style.top = '0';
     bubbleItem.style.width = `${size}px`;
     bubbleItem.style.height = `${size}px`;
 
-    // 2. Horizontal starting position (left offset) between 5% and 85%
-    let leftPos;
+    // Setup initial coordinates (start fully off-screen at bottom)
+    const radius = size / 2;
+    
+    // Distribute base X position across slots, or randomize for promo
+    let baseX;
     if (token.isPromo) {
-      // Promo bubble spawns randomly anywhere across the full page
-      leftPos = Math.floor(Math.random() * 80) + 5;
+      baseX = Math.random() * (containerWidth - size) + radius;
     } else {
-      // Regular bubbles distribute depending on their index to prevent cluster overlap
-      const sectionWidth = 80 / bubblesToSpawn.length;
-      leftPos = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
+      const sectionWidth = (containerWidth - 60) / bubblesToSpawn.length;
+      baseX = index * sectionWidth + Math.random() * sectionWidth + 30;
     }
-    bubbleItem.style.left = `${leftPos}%`;
 
-    // Listen to the animationiteration event to randomize X coordinate each time it loops off-screen
-    bubbleItem.addEventListener('animationiteration', (e) => {
-      // Only react when the vertical floatUp animation finishes its loop off-screen
-      if (e.animationName !== 'floatUp') return;
+    const y = containerHeight + radius;
+    const x = baseX;
 
-      let newLeft;
-      if (token.isPromo) {
-        newLeft = Math.floor(Math.random() * 80) + 5;
-      } else {
-        const sectionWidth = 80 / bubblesToSpawn.length;
-        newLeft = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
-      }
-      bubbleItem.style.left = `${newLeft}%`;
-    });
+    // Movement parameters
+    const floatDuration = Math.random() * 8 + 12; // 12s to 20s
+    const speedY = (containerHeight + size) / floatDuration;
+    
+    const swayDuration = Math.random() * 3 + 3; // 3s to 6s
+    const swaySpeed = (2 * Math.PI) / swayDuration;
+    const swayAmplitude = Math.random() * 10 + 15; // 15px to 25px
+    const swayAngle = Math.random() * Math.PI * 2;
 
-    // 3. Vertical rise animation duration between 12s and 20s
-    const floatDuration = Math.random() * 8 + 12;
-    bubbleItem.style.animationDuration = `${floatDuration}s`;
-
-    // 4. Horizontal sway animation duration between 3s and 6s
-    const swayDuration = Math.random() * 3 + 3;
-    bubbleInner.style.animationDuration = `${swayDuration}s`;
-
-    // 5. Positive animation delay so they start off-screen and enter sequentially after load
+    // Positive staggered spawn delay (0 to 10 seconds)
     const delay = Math.random() * 10;
-    bubbleItem.style.animationDelay = `${delay}s`;
 
-    // Random delay for horizontal sway as well to prevent in-sync swaying
-    const swayDelay = -Math.random() * swayDuration;
-    bubbleInner.style.animationDelay = `${swayDelay}s`;
+    // Hover tracking
+    let isHovered = false;
+    bubbleItem.addEventListener('mouseenter', () => {
+      isHovered = true;
+    });
+    bubbleItem.addEventListener('mouseleave', () => {
+      isHovered = false;
+    });
 
     // Build internal elements
     // Ticker symbol
@@ -1863,7 +1873,6 @@ function spawnBubbles() {
     logo.className = 'bubble-logo';
     logo.src = token.logo ? token.logo : '/icon%2050x50/0001.webp';
     logo.alt = token.symbol;
-    // Fallback if image fails to load
     logo.onerror = () => {
       logo.src = '/icon%2050x50/0001.webp';
     };
@@ -1888,7 +1897,145 @@ function spawnBubbles() {
     bubbleInner.appendChild(bubbleContent);
     bubbleItem.appendChild(bubbleInner);
     container.appendChild(bubbleItem);
+
+    // Initial position translation style
+    bubbleItem.style.transform = `translate3d(${x - radius}px, ${y - radius}px, 0)`;
+
+    // Push into active physics tracking array
+    activeBubbles.push({
+      domElement: bubbleItem,
+      size,
+      radius,
+      x,
+      y,
+      baseX,
+      speedY,
+      swaySpeed,
+      swayAmplitude,
+      swayAngle,
+      delay,
+      index,
+      isPromo: token.isPromo || false,
+      url: token.url,
+      get isHovered() { return isHovered; }
+    });
   });
+
+  // Start the render loop
+  startPhysicsLoop();
+}
+
+function startPhysicsLoop() {
+  lastTime = performance.now();
+  physicsAnimationId = requestAnimationFrame(physicsTick);
+}
+
+function physicsTick(now) {
+  const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // cap dt at 100ms
+  lastTime = now;
+
+  const container = document.getElementById('bubbles-container');
+  if (!container) {
+    physicsAnimationId = requestAnimationFrame(physicsTick);
+    return;
+  }
+  const containerWidth = container.clientWidth || window.innerWidth;
+  const containerHeight = container.clientHeight || window.innerHeight;
+
+  // 1. Update positions
+  activeBubbles.forEach(b => {
+    if (b.delay > 0) {
+      b.delay -= deltaTime;
+      // Keep it hidden off-screen before starting
+      b.y = containerHeight + b.radius;
+      b.x = b.baseX;
+      b.domElement.style.transform = `translate3d(${b.x - b.radius}px, ${b.y - b.radius}px, 0)`;
+      return;
+    }
+
+    if (b.isHovered) {
+      // Pause float and sway animations on hover
+      return;
+    }
+
+    // Rise vertically
+    b.y -= b.speedY * deltaTime;
+    
+    // Sway horizontally
+    b.swayAngle += b.swaySpeed * deltaTime;
+    b.x = b.baseX + Math.sin(b.swayAngle) * b.swayAmplitude;
+
+    // Keep horizontally within screen boundaries
+    if (b.x < b.radius) b.x = b.radius;
+    if (b.x > containerWidth - b.radius) b.x = containerWidth - b.radius;
+  });
+
+  // 2. Resolve collisions (push overlapping bubbles apart)
+  for (let step = 0; step < 3; step++) {
+    for (let i = 0; i < activeBubbles.length; i++) {
+      const b1 = activeBubbles[i];
+      if (b1.delay > 0) continue;
+
+      for (let j = i + 1; j < activeBubbles.length; j++) {
+        const b2 = activeBubbles[j];
+        if (b2.delay > 0) continue;
+
+        const dx = b2.x - b1.x;
+        const dy = b2.y - b1.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = b1.radius + b2.radius;
+
+        if (dist < minDist) {
+          const overlap = minDist - dist;
+          const nx = dx / (dist || 1);
+          const ny = dy / (dist || 1);
+
+          // Mass/inertia proportional to area (radius^2) so bigger bubbles push small bubbles more
+          const m1 = b1.radius * b1.radius;
+          const m2 = b2.radius * b2.radius;
+          const totalMass = m1 + m2;
+
+          const ratio1 = m2 / totalMass;
+          const ratio2 = m1 / totalMass;
+
+          // Push them apart gently
+          if (!b1.isHovered) {
+            b1.x -= nx * overlap * ratio1;
+            b1.y -= ny * overlap * ratio1;
+          }
+          if (!b2.isHovered) {
+            b2.x += nx * overlap * ratio2;
+            b2.y += ny * overlap * ratio2;
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Update DOM styles and handle off-screen recycling
+  activeBubbles.forEach(b => {
+    if (b.delay > 0) return;
+
+    // Check if fully off-screen at the top
+    if (b.y < -b.radius) {
+      b.y = containerHeight + b.radius;
+      b.delay = 0; // immediate recycle, no delay
+
+      // Randomize starting X position again
+      if (b.isPromo) {
+        b.baseX = Math.random() * (containerWidth - b.size) + b.radius;
+      } else {
+        const sectionWidth = (containerWidth - 60) / activeBubbles.length;
+        b.baseX = b.index * sectionWidth + Math.random() * sectionWidth + 30;
+      }
+      b.swayAngle = Math.random() * Math.PI * 2;
+    }
+
+    // Apply translation to DOM
+    b.domElement.style.transform = `translate3d(${b.x - b.radius}px, ${b.y - b.radius}px, 0)`;
+  });
+
+  physicsAnimationId = requestAnimationFrame(physicsTick);
 }
 
 // =============================================================================
