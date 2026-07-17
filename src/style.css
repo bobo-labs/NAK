@@ -1299,6 +1299,27 @@ canvas {
   filter: brightness(1.1) drop-shadow(0 8px 16px rgba(0, 200, 255, 0.4));
 }
 
+/* Special Promo Bubble Styling */
+.bubble-content.promo {
+  background-image: url('/bubbles/bubble_promo.webp');
+  animation: promoGlow 2.5s ease-in-out infinite alternate;
+}
+
+.bubble-content.promo:hover {
+  animation-play-state: paused;
+  filter: brightness(1.25) drop-shadow(0 0 20px rgba(255, 215, 0, 0.95));
+  transform: scale(1.18);
+}
+
+@keyframes promoGlow {
+  0% {
+    filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.55)) brightness(1.0);
+  }
+  100% {
+    filter: drop-shadow(0 0 16px rgba(255, 200, 0, 0.95)) brightness(1.18);
+  }
+}
+
 /* Pause keyframe animations on hover */
 .bubble-item:hover,
 .bubble-item:hover .bubble-inner {

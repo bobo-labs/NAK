@@ -215,6 +215,17 @@ let loadedModelGroup = null;
 let tokenBubblesData = [];
 let isBenchmarkFinished = false;
 
+// ---- Special Promo Bubble Configuration ----
+const bubble_promo = {
+  enabled: true,
+  canisterId: 'eig2s-waaaa-aaaam-qbg5a-cai',
+  symbol: 'NAK',
+  logo: null,       // Loaded dynamically from API on success, or falls back
+  change: null,     // Loaded dynamically from API on success, or falls back
+  url: 'https://icptokens.net/token/eig2s-waaaa-aaaam-qbg5a-cai',
+  isPromo: true
+};
+
 // ---- Target objects for calculations ----
 let conchMesh = null;
 
@@ -1733,6 +1744,16 @@ function processIcpTokensData(data) {
     url: `https://icptokens.net/token/${t.canister_id}`
   }));
 
+  // Look for the promo token in the raw API data to get live stats
+  if (bubble_promo && bubble_promo.enabled) {
+    const foundPromo = data.find(t => t.canister_id === bubble_promo.canisterId);
+    if (foundPromo) {
+      bubble_promo.symbol = foundPromo.symbol;
+      bubble_promo.logo = `https://icptokens.net/storage/${foundPromo.logo}`;
+      bubble_promo.change = foundPromo.metrics?.change['24h']?.usd || 0;
+    }
+  }
+
   tokenBubblesData = [...gainers, ...losers];
 }
 
@@ -1745,12 +1766,25 @@ function spawnBubbles() {
   // Clear any existing bubbles
   container.innerHTML = '';
 
-  if (tokenBubblesData.length === 0) {
+  const bubblesToSpawn = [...tokenBubblesData];
+  if (bubble_promo && bubble_promo.enabled) {
+    const promoChange = bubble_promo.change !== null ? bubble_promo.change : 24.5;
+    bubblesToSpawn.push({
+      symbol: bubble_promo.symbol || 'NAK',
+      logo: bubble_promo.logo,
+      change: promoChange,
+      isGainer: promoChange >= 0,
+      url: bubble_promo.url || `https://icptokens.net/token/${bubble_promo.canisterId}`,
+      isPromo: true
+    });
+  }
+
+  if (bubblesToSpawn.length === 0) {
     console.warn('[Bubbles] No token data available to spawn bubbles.');
     return;
   }
 
-  tokenBubblesData.forEach((token, index) => {
+  bubblesToSpawn.forEach((token, index) => {
     // Create outer bubble-item
     const bubbleItem = document.createElement('div');
     bubbleItem.className = 'bubble-item';
@@ -1762,16 +1796,21 @@ function spawnBubbles() {
     // Create content wrapper
     const bubbleContent = document.createElement('div');
     bubbleContent.className = 'bubble-content';
+    if (token.isPromo) {
+      bubbleContent.classList.add('promo');
+    }
 
     // Randomize properties:
-    // 1. Size between 80px and 115px
-    const size = Math.floor(Math.random() * 35) + 80;
+    // 1. Size: 125px for promo bubble (Noticeably larger! Normal is 80px to 115px)
+    const size = token.isPromo 
+      ? 125 
+      : Math.floor(Math.random() * 35) + 80;
     bubbleItem.style.width = `${size}px`;
     bubbleItem.style.height = `${size}px`;
 
     // 2. Horizontal starting position (left offset) between 5% and 85%
     // Distribute them slightly depending on their index to prevent cluster overlap
-    const sectionWidth = 80 / tokenBubblesData.length;
+    const sectionWidth = 80 / bubblesToSpawn.length;
     const leftPos = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
     bubbleItem.style.left = `${leftPos}%`;
 
