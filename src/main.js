@@ -1821,7 +1821,10 @@ function spawnBubbles() {
     bubbleItem.style.left = `${leftPos}%`;
 
     // Listen to the animationiteration event to randomize X coordinate each time it loops off-screen
-    bubbleItem.addEventListener('animationiteration', () => {
+    bubbleItem.addEventListener('animationiteration', (e) => {
+      // Only react when the vertical floatUp animation finishes its loop off-screen
+      if (e.animationName !== 'floatUp') return;
+
       let newLeft;
       if (token.isPromo) {
         newLeft = Math.floor(Math.random() * 80) + 5;
