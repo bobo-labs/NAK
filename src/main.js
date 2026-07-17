@@ -1802,8 +1802,8 @@ function spawnBubbles() {
 
     // Randomize properties:
     // 1. Size: 150px for promo bubble (Noticeably larger! Normal is 80px to 115px)
-    const size = token.isPromo 
-      ? 150 
+    const size = token.isPromo
+      ? 300
       : Math.floor(Math.random() * 35) + 80;
     bubbleItem.style.width = `${size}px`;
     bubbleItem.style.height = `${size}px`;
@@ -1843,8 +1843,8 @@ function spawnBubbles() {
     const swayDuration = Math.random() * 3 + 3;
     bubbleInner.style.animationDuration = `${swayDuration}s`;
 
-    // 5. Negative animation delay so they start immediately at different heights
-    const delay = -Math.random() * floatDuration;
+    // 5. Positive animation delay so they start off-screen and enter sequentially after load
+    const delay = Math.random() * 10;
     bubbleItem.style.animationDelay = `${delay}s`;
 
     // Random delay for horizontal sway as well to prevent in-sync swaying

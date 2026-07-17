@@ -1262,7 +1262,7 @@ canvas {
 /* Outer bubble element handles vertical rise animation */
 .bubble-item {
   position: absolute;
-  bottom: -150px; /* start fully off-screen */
+  bottom: -350px; /* start fully off-screen (fits up to 300px promo bubble) */
   animation: floatUp 15s linear infinite;
   will-change: transform;
 }
@@ -1371,7 +1371,7 @@ canvas {
     transform: translateY(0);
   }
   100% {
-    transform: translateY(calc(-100vh - 200px)); /* floats up past top of screen */
+    transform: translateY(calc(-100vh - 400px)); /* floats up past top of screen */
   }
 }
 
