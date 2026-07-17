@@ -1801,17 +1801,23 @@ function spawnBubbles() {
     }
 
     // Randomize properties:
-    // 1. Size: 125px for promo bubble (Noticeably larger! Normal is 80px to 115px)
+    // 1. Size: 145px for promo bubble (Noticeably larger! Normal is 80px to 115px)
     const size = token.isPromo 
-      ? 125 
+      ? 145 
       : Math.floor(Math.random() * 35) + 80;
     bubbleItem.style.width = `${size}px`;
     bubbleItem.style.height = `${size}px`;
 
     // 2. Horizontal starting position (left offset) between 5% and 85%
-    // Distribute them slightly depending on their index to prevent cluster overlap
-    const sectionWidth = 80 / bubblesToSpawn.length;
-    const leftPos = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
+    let leftPos;
+    if (token.isPromo) {
+      // Promo bubble spawns randomly anywhere across the full page
+      leftPos = Math.floor(Math.random() * 80) + 5;
+    } else {
+      // Regular bubbles distribute depending on their index to prevent cluster overlap
+      const sectionWidth = 80 / bubblesToSpawn.length;
+      leftPos = Math.floor(index * sectionWidth + Math.random() * sectionWidth + 10);
+    }
     bubbleItem.style.left = `${leftPos}%`;
 
     // 3. Vertical rise animation duration between 12s and 20s
