@@ -1814,10 +1814,10 @@ function spawnBubbles() {
     }
 
     // Determine size
-    const size = token.isPromo 
-      ? 300 
+    const size = token.isPromo
+      ? 300
       : Math.floor(Math.random() * 35) + 80;
-    
+
     // Set style dimensions
     bubbleItem.style.position = 'absolute';
     bubbleItem.style.left = '0';
@@ -1827,7 +1827,7 @@ function spawnBubbles() {
 
     // Setup initial coordinates (start fully off-screen at bottom)
     const radius = size / 2;
-    
+
     // Distribute base X position across slots, or randomize for promo
     let baseX;
     if (token.isPromo) {
@@ -1843,7 +1843,7 @@ function spawnBubbles() {
     // Movement parameters
     const floatDuration = Math.random() * 8 + 12; // 12s to 20s
     const speedY = (containerHeight + size) / floatDuration;
-    
+
     const swayDuration = Math.random() * 3 + 3; // 3s to 6s
     const swaySpeed = (2 * Math.PI) / swayDuration;
     const swayAmplitude = Math.random() * 10 + 15; // 15px to 25px
@@ -1960,7 +1960,7 @@ function physicsTick(now) {
 
     // Rise vertically
     b.y -= b.speedY * deltaTime;
-    
+
     // Sway horizontally
     b.swayAngle += b.swaySpeed * deltaTime;
     b.x = b.baseX + Math.sin(b.swayAngle) * b.swayAmplitude;
