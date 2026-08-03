@@ -1,0 +1,67 @@
+type TokenConfig = record {
+  amount : nat64;
+  decimals : nat8;
+  fee : nat64;
+  indexCanisterId : principal;
+  ledgerCanisterId : principal;
+  network : text;
+  tokenSymbol : text;
+};
+
+type SettleResult = variant {
+  err : SettleError;
+  ok : AnswerReceipt;
+};
+
+type SettleRequest = record {
+  blockIndex : nat64;
+  legacyMemo : nat64;
+  paymentId : blob;
+  questionCommitment : blob;
+};
+
+type SettleError = variant {
+  amountMismatch : record { expected : nat64; received : nat64 };
+  blockAlreadyClaimed;
+  busy;
+  configuration : text;
+  invalidInput : text;
+  memoMismatch;
+  paymentNotIndexed;
+  recipientMismatch;
+  upstream : text;
+};
+
+type ReceiptView = record {
+  amount : nat64;
+  blockIndex : nat64;
+  paymentId : blob;
+  questionCommitment : blob;
+  state : ReceiptState;
+  tokenSymbol : text;
+};
+
+type ReceiptState = variant {
+  answering;
+  complete : nat8;
+  verified;
+};
+
+type ConfigResult = variant {
+  err : text;
+  ok : TokenConfig;
+};
+
+type AnswerReceipt = record {
+  amount : nat64;
+  answerId : nat8;
+  blockIndex : nat64;
+  tokenSymbol : text;
+};
+
+service : {
+  getConfig : () -> (ConfigResult);
+  getReceipt : (blockIndex : nat64) -> (opt ReceiptView) query;
+  health : () -> (text) query;
+  settlePayment : (request : SettleRequest) -> (SettleResult);
+};

@@ -6,13 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "check:motoko": "node scripts/check-motoko.mjs",
+    "check:motoko:windows": "npm run check:motoko",
+    "test": "node --test test/intent.test.js",
     "preview": "vite preview",
     "start": "vite preview --port $PORT --host 0.0.0.0"
   },
   "dependencies": {
-    "three": "^0.184.0"
+    "@dfinity/oisy-wallet-signer": "4.1.3",
+    "@dfinity/utils": "4.2.1",
+    "@dfinity/zod-schemas": "3.2.0",
+    "@icp-sdk/canisters": "3.6.0",
+    "@icp-sdk/core": "5.4.0",
+    "three": "^0.184.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
+    "@icp-sdk/bindgen": "0.4.0",
+    "motoko": "4.11.0",
     "vite": "^5.0.0"
   }
 }

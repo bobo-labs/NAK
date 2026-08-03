@@ -15,6 +15,7 @@ import { customDof } from './CustomDepthOfFieldNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { connectWallet, purchaseOracleAnswer } from './web3/oracle.js';
 
 // ============================================================================
 // TWEAKABLE CONFIGURATION & QUALITY TIERS
@@ -138,6 +139,11 @@ const signatureMessageText = document.querySelector('#signature-message-text');
 const sigRejectBtn = document.querySelector('#sig-reject-btn');
 const sigApproveBtn = document.querySelector('#sig-approve-btn');
 const sigLoader = document.querySelector('#sig-loader');
+const sigLoaderText = document.querySelector('#sig-loader-text');
+const walletModalFooter = document.querySelector('#wallet-modal-footer');
+const walletModalAmount = document.querySelector('#wallet-modal-amount');
+const walletModalFee = document.querySelector('#wallet-modal-fee');
+const walletModalRecipient = document.querySelector('#wallet-modal-recipient');
 
 // ---- Core objects ----
 let scene, renderer, defaultCamera, activeCamera;
@@ -179,16 +185,8 @@ const conchVoices = conchVoiceFiles.map(file => ({
   weight: file.weight
 }));
 
-function getWeightedRandomConchVoice() {
-  const totalWeight = conchVoices.reduce((sum, item) => sum + item.weight, 0);
-  let random = Math.random() * totalWeight;
-  for (const item of conchVoices) {
-    if (random < item.weight) {
-      return item.audio;
-    }
-    random -= item.weight;
-  }
-  return conchVoices[0].audio;
+function getConchVoiceByAnswerId(answerId) {
+  return conchVoices[answerId]?.audio ?? null;
 }
 
 // ---- Icon Hover Animation ----
@@ -606,63 +604,27 @@ async function init() {
     if (walletDropdown) walletDropdown.classList.add('hidden');
   });
 
-  // Connect mock wallet options
+  // Connect real wallet options. The signer handles permissions and consent.
   walletOptionBtns.forEach(optionBtn => {
-    optionBtn.addEventListener('click', () => {
+    optionBtn.addEventListener('click', async () => {
       const walletType = optionBtn.getAttribute('data-wallet');
-      connectMockWallet(walletType);
+      await handleWalletConnection(walletType);
     });
   });
 
-  // Enable/disable BURN button based on question selection
+  // Payment is enabled only after both wallet connection and question selection.
   questionRadioBtns.forEach(radio => {
     radio.addEventListener('change', () => {
-      if (burnBtn) burnBtn.disabled = false;
+      updateBurnAvailability();
     });
   });
 
-  // BURN button event to show signature request modal
+  // The real wallet opens its own approval UI; our modal only reports progress.
   if (burnBtn) {
-    burnBtn.addEventListener('click', () => {
-      let selectedQuestionText = "";
-      questionRadioBtns.forEach(radio => {
-        if (radio.checked) {
-          const parentLabel = radio.closest('.question-option');
-          if (parentLabel) {
-            const textSpan = parentLabel.querySelector('.question-text');
-            if (textSpan) selectedQuestionText = textSpan.textContent;
-          }
-        }
-      });
-      if (!selectedQuestionText) return;
-
-      if (signatureMessageText) {
-        signatureMessageText.textContent = `ask_oracle("${selectedQuestionText}")`;
-      }
-
-      // Customize signature request header matching selected wallet
-      const walletHeaderTitle = walletSignatureModal.querySelector('.wallet-modal-title');
-      const walletAvatar = walletSignatureModal.querySelector('.wallet-avatar');
-      if (walletHeaderTitle && walletAvatar) {
-        if (connectedWalletType === 'ii') {
-          walletHeaderTitle.textContent = "Internet Identity";
-          walletAvatar.textContent = "♾️";
-        } else if (connectedWalletType === 'bitfinity') {
-          walletHeaderTitle.textContent = "Bitfinity Wallet";
-          walletAvatar.textContent = "🔮";
-        } else {
-          walletHeaderTitle.textContent = "Plug Wallet";
-          walletAvatar.textContent = "🔌";
-        }
-      }
-
-      if (walletSignatureModal) {
-        walletSignatureModal.classList.remove('hidden');
-      }
-    });
+    burnBtn.addEventListener('click', handleOraclePayment);
   }
 
-  // Signature modal reject/approve actions
+  // Status modal close actions; these never approve or reject a transaction.
   if (sigRejectBtn) {
     sigRejectBtn.addEventListener('click', () => {
       if (walletSignatureModal) walletSignatureModal.classList.add('hidden');
@@ -671,13 +633,7 @@ async function init() {
 
   if (sigApproveBtn) {
     sigApproveBtn.addEventListener('click', () => {
-      if (sigLoader) sigLoader.classList.remove('hidden');
-      setTimeout(() => {
-        if (sigLoader) sigLoader.classList.add('hidden');
-        if (walletSignatureModal) walletSignatureModal.classList.add('hidden');
-        if (cardStateAsk) cardStateAsk.classList.add('hidden');
-        if (cardStatePull) cardStatePull.classList.remove('hidden');
-      }, 1500);
+      if (walletSignatureModal) walletSignatureModal.classList.add('hidden');
     });
   }
 
@@ -1112,20 +1068,147 @@ function updateButtonPosition() {
 // =============================================================================
 let isWalletConnected = false;
 let connectedWalletType = '';
+let connectedTokenConfig = null;
+let isWalletConnecting = false;
+let isPaymentPending = false;
+let pendingAnswerId = null;
 
-function connectMockWallet(walletType) {
-  isWalletConnected = true;
-  connectedWalletType = walletType;
-  if (walletConnectBtn) {
-    walletConnectBtn.textContent = '[ b3a1...7x9 | 4.20 ICP ]';
-    walletConnectBtn.style.background = '#ffd635';
+function selectedQuestionText() {
+  for (const radio of questionRadioBtns) {
+    if (!radio.checked) continue;
+    const textSpan = radio.closest('.question-option')?.querySelector('.question-text');
+    if (textSpan) return textSpan.textContent.trim();
   }
+  return '';
+}
+
+function shortPrincipal(principal) {
+  if (principal.length <= 16) return principal;
+  return `${principal.slice(0, 6)}...${principal.slice(-5)}`;
+}
+
+function formatTokenAmount(value, decimals) {
+  const amount = BigInt(value);
+  const divisor = 10n ** BigInt(decimals);
+  const whole = amount / divisor;
+  const fraction = (amount % divisor).toString().padStart(decimals, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function updateBurnAvailability() {
+  if (!burnBtn) return;
+  burnBtn.disabled = !isWalletConnected || !selectedQuestionText() || isPaymentPending;
+
+  const label = burnBtn.querySelector('.wood-btn-text');
+  if (!label || isPaymentPending) return;
+  if (connectedTokenConfig) {
+    const amount = formatTokenAmount(connectedTokenConfig.amount, connectedTokenConfig.decimals);
+    label.textContent = `PAY ${amount} ${connectedTokenConfig.tokenSymbol} TO PROMPT`;
+  } else {
+    label.textContent = 'PAY 0.01 TESTICP TO PROMPT';
+  }
+}
+
+function setWalletModal({ loading, message, loaderText = '', showClose = false }) {
+  if (signatureMessageText) signatureMessageText.textContent = message;
+  if (sigLoaderText) sigLoaderText.textContent = loaderText;
+  if (sigLoader) sigLoader.classList.toggle('hidden', !loading);
+  if (walletModalFooter) walletModalFooter.classList.toggle('hidden', !showClose);
+  if (walletSignatureModal) walletSignatureModal.classList.remove('hidden');
+}
+
+function configureWalletModal(walletType, config) {
+  const title = walletSignatureModal?.querySelector('.wallet-modal-title');
+  const avatar = walletSignatureModal?.querySelector('.wallet-avatar');
+  if (title) title.textContent = walletType === 'plug' ? 'Plug Wallet' : 'OISY Wallet';
+  if (avatar) avatar.textContent = walletType === 'plug' ? '🔌' : '🔵';
+
+  if (!config) return;
+  const amount = formatTokenAmount(config.amount, config.decimals);
+  const fee = formatTokenAmount(config.fee, config.decimals);
+  if (walletModalAmount) walletModalAmount.textContent = `${amount} ${config.tokenSymbol}`;
+  if (walletModalFee) walletModalFee.textContent = `${fee} ${config.tokenSymbol}`;
+  if (walletModalRecipient) walletModalRecipient.textContent = 'Unique oracle canister subaccount';
+}
+
+function onWalletDisconnected() {
+  isWalletConnected = false;
+  connectedWalletType = '';
+  connectedTokenConfig = null;
+  if (walletConnectBtn) {
+    walletConnectBtn.textContent = 'Connect Wallet';
+    walletConnectBtn.style.background = '';
+  }
+  updateBurnAvailability();
+}
+
+async function handleWalletConnection(walletType) {
+  if (!walletType || isWalletConnecting || isPaymentPending) return;
+  isWalletConnecting = true;
   if (walletDropdown) walletDropdown.classList.add('hidden');
+  if (walletConnectBtn) walletConnectBtn.textContent = 'Connecting...';
+
+  try {
+    const connection = await connectWallet(walletType, onWalletDisconnected);
+    isWalletConnected = true;
+    connectedWalletType = connection.type;
+    connectedTokenConfig = connection.config;
+    if (walletConnectBtn) {
+      walletConnectBtn.textContent = `[ ${shortPrincipal(connection.principal)} | ${connection.config.tokenSymbol} ]`;
+      walletConnectBtn.style.background = '#ffd635';
+    }
+  } catch (error) {
+    onWalletDisconnected();
+    configureWalletModal(walletType, null);
+    setWalletModal({
+      loading: false,
+      message: error instanceof Error ? error.message : 'Wallet connection failed.',
+      showClose: true,
+    });
+  } finally {
+    isWalletConnecting = false;
+    updateBurnAvailability();
+  }
+}
+
+async function handleOraclePayment() {
+  const question = selectedQuestionText();
+  if (!question || !isWalletConnected || !connectedTokenConfig || isPaymentPending) return;
+
+  isPaymentPending = true;
+  updateBurnAvailability();
+  const label = burnBtn?.querySelector('.wood-btn-text');
+  if (label) label.textContent = 'VERIFYING PAYMENT...';
+  configureWalletModal(connectedWalletType, connectedTokenConfig);
+  setWalletModal({
+    loading: true,
+    message: 'Continue in your wallet to approve the payment. The oracle will verify it on-chain.',
+    loaderText: 'Waiting for wallet approval...',
+  });
+
+  try {
+    const receipt = await purchaseOracleAnswer(question);
+    pendingAnswerId = Number(receipt.answerId);
+    if (sigLoaderText) sigLoaderText.textContent = 'Payment verified. Random answer sealed on-chain.';
+    if (walletSignatureModal) walletSignatureModal.classList.add('hidden');
+    if (cardStateAsk) cardStateAsk.classList.add('hidden');
+    if (cardStatePull) cardStatePull.classList.remove('hidden');
+  } catch (error) {
+    setWalletModal({
+      loading: false,
+      message: error instanceof Error ? error.message : 'The oracle payment could not be completed.',
+      showClose: true,
+    });
+  } finally {
+    isPaymentPending = false;
+    updateBurnAvailability();
+  }
 }
 
 function resetCardToAskState() {
+  pendingAnswerId = null;
   questionRadioBtns.forEach(radio => radio.checked = false);
-  if (burnBtn) burnBtn.disabled = true;
+  updateBurnAvailability();
   if (cardStatePull) cardStatePull.classList.add('hidden');
   if (cardStateAsk) cardStateAsk.classList.remove('hidden');
   if (conchPullBtn) {
@@ -1174,9 +1257,9 @@ function onPullCord() {
     pullSoundTimeoutId = null;
   }, 2000);
 
-  // Play random conch response after 124 frames in 30fps = 4133ms
+  // Play the on-chain-selected conch response after 124 frames at 30fps = 4133ms.
   voiceSoundTimeoutId = setTimeout(() => {
-    const selectedVoice = getWeightedRandomConchVoice();
+    const selectedVoice = getConchVoiceByAnswerId(pendingAnswerId);
     if (selectedVoice) {
       selectedVoice.currentTime = 0;
       selectedVoice.play().catch(err => console.warn('[Audio] Failed to play conch voice response:', err));

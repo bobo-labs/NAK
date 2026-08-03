@@ -1,0 +1,48 @@
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      port: 0
+
+canisters:
+  - name: backend
+    recipe:
+      type: "@dfinity/motoko@v5.0.0"
+    settings:
+      environment_variables:
+        NAK_NETWORK: staging
+        NAK_LEDGER_CANISTER_ID: xafvr-biaaa-aaaai-aql5q-cai
+        NAK_INDEX_CANISTER_ID: qcuy6-bqaaa-aaaai-aqmqq-cai
+        NAK_TOKEN_SYMBOL: TESTICP
+
+  - name: frontend
+    recipe:
+      type: "@dfinity/asset-canister@v2.2.1"
+      configuration:
+        dir: dist
+        build:
+          - npm install
+          - npm run build
+
+environments:
+  - name: staging
+    network: ic
+    canisters: [backend, frontend]
+    settings:
+      backend:
+        environment_variables:
+          NAK_NETWORK: staging
+          NAK_LEDGER_CANISTER_ID: xafvr-biaaa-aaaai-aql5q-cai
+          NAK_INDEX_CANISTER_ID: qcuy6-bqaaa-aaaai-aqmqq-cai
+          NAK_TOKEN_SYMBOL: TESTICP
+
+  - name: production
+    network: ic
+    canisters: [backend, frontend]
+    settings:
+      backend:
+        environment_variables:
+          NAK_NETWORK: production
+          NAK_LEDGER_CANISTER_ID: ryjl3-tyaaa-aaaaa-aaaba-cai
+          NAK_INDEX_CANISTER_ID: qhbym-qaaaa-aaaaa-aaafq-cai
+          NAK_TOKEN_SYMBOL: ICP

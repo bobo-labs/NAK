@@ -1,0 +1,26 @@
+[package]
+name = "nak-oracle"
+version = "0.1.0"
+description = "Payment-verified Magic Conch oracle for NAK"
+repository = "https://github.com/dfinity/NAK"
+
+[dependencies]
+core = "2.6.1"
+
+[dev-dependencies]
+test = "2.1.2"
+
+[toolchain]
+moc = "1.13.0"
+lintoko = "0.11.0"
+pocket-ic = "14.0.0"
+
+[moc]
+args = ["--default-persistent-actors", "-W=M0223,M0236,M0237"]
+
+[canisters.backend]
+main = "src/backend/main.mo"
+candid = "src/backend/backend.did"
+
+[build]
+args = ["--release"]
