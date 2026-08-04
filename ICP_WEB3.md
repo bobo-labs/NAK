@@ -1,6 +1,6 @@
 # NAK Magic Conch — ICP Web3 Integration
 
-Status: implementation is on `feature/icp-web3`. No canister has been deployed and no real ICP transaction has been requested.
+Status: implementation is on `feature/icp-web3`. TESTICP staging was deployed on 2026-08-04. No real ICP payment has been requested.
 
 ## What is implemented
 
@@ -24,6 +24,17 @@ The question text is not written on-chain. The browser creates a unique 32-byte 
 Both use 8 decimals, a 10,000 e8s ledger fee, and a 1,000,000 e8s (0.01 token) oracle payment.
 
 `production` exists as configuration only. Do not deploy it until staging is tested and the real-token wording, treasury policy, controllers, monitoring, and upgrade process are approved.
+
+## Live staging deployment
+
+| Component | Canister ID |
+| --- | --- |
+| Backend oracle | `dal4e-uyaaa-aaaad-qmbza-cai` |
+| Frontend assets | `dhk2q-zaaaa-aaaad-qmbzq-cai` |
+
+Public URL: <https://dhk2q-zaaaa-aaaad-qmbzq-cai.icp.net/>
+
+The deployment uses the `nak-staging` CLI identity as the sole controller. Both canisters are running, their deployed configuration points to the official TESTICP ledger and index canisters, and desktop/mobile visual checks preserve the original composition. The canister mapping is committed at `.icp/data/mappings/staging.ids.json` so later upgrades target these same canisters.
 
 ## Windows without WSL
 
@@ -69,23 +80,22 @@ Remove the variable when finished:
 Remove-Item Env:ICP_ENVIRONMENT
 ```
 
-## Staging checklist
+## Staging verification checklist
 
-1. Run the GitHub Actions checks or the canonical Mops checks on Linux.
-2. Create or select a named `icp` CLI identity and fund it with enough cycles for two canisters plus storage.
-3. Deploy only staging:
+Completed: canonical Linux build, named identity creation, cycle funding, staging deployment, canister status/config checks, and desktop/mobile visual checks.
 
-   ```bash
-   icp deploy -e staging
-   ```
+Remaining wallet flow:
 
-4. Commit `.icp/data/mappings/staging.ids.json`; never ignore or delete `.icp/data`.
-5. Obtain TESTICP from the official faucet and select IC testnet tokens in OISY.
-6. Connect OISY, select a question, approve one 0.01 TESTICP transfer, wait for index settlement, then pull the cord.
-7. Verify that refresh/retry returns the same answer for the same block and that a block cannot be claimed with a different commitment.
-8. Test desktop and mobile screenshots against the pre-integration visual baseline.
+1. Obtain TESTICP in the OISY staging wallet and select IC testnet tokens in OISY.
+2. Open the deployed frontend and connect OISY.
+3. Select a question, approve one 0.01 TESTICP transfer, wait for index settlement, then pull the cord.
+4. Verify that refresh/retry returns the same answer for the same block and that a block cannot be claimed with a different commitment.
 
-No staging deployment is performed by this branch because deployment creates on-chain state and consumes cycles.
+Future staging upgrades use the committed IDs:
+
+```bash
+icp deploy -e staging --identity nak-staging
+```
 
 ## Design boundary
 
