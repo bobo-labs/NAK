@@ -41,7 +41,7 @@ The canonical public hostname is the current `icp.net` URL above. `https://dhk2q
 
 OISY connections use the current standalone signer hosts: `https://staging.signer.oisy.com` for TESTICP staging and `https://signer.oisy.com` for production. The older `staging.oisy.com/sign` and `oisy.com/sign` routes are not used.
 
-Market bubbles use ICP Tokens' dedicated `/api/v2/gainers-losers` endpoint. Because ICP Tokens restricts browser CORS, the Motoko backend makes non-replicated HTTPS outcalls, caps response sizes, caches successful responses, and serves stale cached data if a refresh fails. This data is decorative and is never used for payment verification or answer selection.
+Market bubbles use ICP Tokens' dedicated `/api/v2/gainers-losers` endpoint. Because ICP Tokens restricts browser CORS, the Motoko backend makes non-replicated HTTPS outcalls, caps response sizes, caches successful responses, and serves stale cached data if a refresh fails. Normal page loads use a query call; only the first request after the five-minute expiry performs the cycles-consuming refresh. This data is decorative and is never used for payment verification or answer selection.
 
 ## Windows without WSL
 

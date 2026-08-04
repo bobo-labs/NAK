@@ -1690,7 +1690,16 @@ async function fetchTokenData() {
       ]);
     } else {
       const { actor } = getBackendContext();
-      const result = await actor.getMarketMovers();
+      const cached = await actor.getCachedMarketMovers();
+      let result = cached;
+      if ('err' in cached || cached.ok.stale) {
+        const refreshed = await actor.getMarketMovers();
+        if ('ok' in refreshed) {
+          result = refreshed;
+        } else if ('err' in cached) {
+          throw new Error(refreshed.err);
+        }
+      }
       if ('err' in result) {
         throw new Error(result.err);
       }

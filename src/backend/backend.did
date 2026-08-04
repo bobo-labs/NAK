@@ -62,6 +62,7 @@ type AnswerReceipt = record {
 type MarketPayload = record {
   movers : text;
   promo : text;
+  stale : bool;
 };
 
 type MarketResult = variant {
@@ -86,6 +87,7 @@ type TransformArgs = record {
 };
 
 service : {
+  getCachedMarketMovers : () -> (MarketResult) query;
   getConfig : () -> (ConfigResult);
   getMarketMovers : () -> (MarketResult);
   getReceipt : (blockIndex : nat64) -> (opt ReceiptView) query;

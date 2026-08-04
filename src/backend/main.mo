@@ -14,9 +14,13 @@ import OracleMixin "mixins/Oracle";
 import Types "types";
 
 actor Oracle {
-  type MarketPayload = {
+  type MarketData = {
     movers : Text;
     promo : Text;
+  };
+
+  type MarketPayload = MarketData and {
+    stale : Bool;
   };
 
   type MarketResult = {
@@ -24,7 +28,7 @@ actor Oracle {
     #err : Text;
   };
 
-  type MarketCache = MarketPayload and {
+  type MarketCache = MarketData and {
     fetchedAt : Int;
   };
 
@@ -35,11 +39,23 @@ actor Oracle {
 
   include OracleMixin(receipts, Principal.fromActor(Oracle));
 
+  func marketPayload(cache : MarketCache) : MarketPayload {
+    {
+      movers = cache.movers;
+      promo = cache.promo;
+      stale = Time.now() - cache.fetchedAt >= marketCacheTtlNanos;
+    };
+  };
+
   func cachedMarketOrError(message : Text) : MarketResult {
     switch (marketCache) {
-      case (?cache) { #ok({ movers = cache.movers; promo = cache.promo }) };
+      case (?cache) { #ok(marketPayload(cache)) };
       case null { #err(message) };
     };
+  };
+
+  public query func getCachedMarketMovers() : async MarketResult {
+    cachedMarketOrError("ICP Tokens data has not been loaded yet");
   };
 
   public query func transformMarketResponse(args : {
@@ -84,7 +100,7 @@ actor Oracle {
     switch (marketCache) {
       case (?cache) {
         if (now - cache.fetchedAt < marketCacheTtlNanos) {
-          return #ok({ movers = cache.movers; promo = cache.promo });
+          return #ok(marketPayload(cache));
         };
       };
       case null {};
@@ -107,7 +123,7 @@ actor Oracle {
       let fetchedAt = Time.now();
       marketCache := ?{ movers; promo; fetchedAt };
       marketRequestInFlight := false;
-      #ok({ movers; promo });
+      #ok({ movers; promo; stale = false });
     } catch (error) {
       marketRequestInFlight := false;
       cachedMarketOrError("ICP Tokens request failed: " # error.message());
