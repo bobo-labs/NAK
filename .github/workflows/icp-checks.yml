@@ -25,7 +25,7 @@ jobs:
       - name: Install canonical ICP toolchain
         run: npm install --global @icp-sdk/icp-cli@1.2.0 @icp-sdk/ic-wasm@0.11.0 ic-mops@2.19.2
 
-      - run: mops install --lock update
+      - run: mops install --lock check
       - run: mops check backend
       - run: icp project show
 
