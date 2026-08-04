@@ -12,5 +12,7 @@ test('asset policy permits embedded GLB textures without enabling raw access', a
   assert.equal(defaultRule.allow_raw_access, false);
   assert.match(defaultRule.headers['Content-Security-Policy'], /connect-src[^;]*\bblob:/);
   assert.match(defaultRule.headers['Content-Security-Policy'], /img-src[^;]*\bblob:/);
+  assert.match(defaultRule.headers['Content-Security-Policy'], /img-src[^;]*https:\/\/icptokens\.net/);
+  assert.doesNotMatch(defaultRule.headers['Content-Security-Policy'], /geckoterminal/i);
   assert.match(defaultRule.headers['Content-Security-Policy'], /media-src\s+'self'/);
 });

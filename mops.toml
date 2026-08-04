@@ -6,6 +6,7 @@ repository = "https://github.com/dfinity/NAK"
 
 [dependencies]
 core = "2.6.1"
+ic = "4.2.0"
 
 [toolchain]
 moc = "1.13.0"

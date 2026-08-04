@@ -17,6 +17,7 @@ function walk(directory) {
 
 await mo.installPackages({
   core: 'caffeinelabs/motoko-core/v2.6.1/src',
+  ic: 'caffeinelabs/mops-ic/v4.2.0/src',
 });
 
 const motokoFiles = [...walk(backendRoot), ...walk(testRoot)].filter(file => file.endsWith('.mo'));

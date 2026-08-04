@@ -11,6 +11,7 @@ Status: implementation is on `feature/icp-web3`. TESTICP staging was deployed on
 - On-chain answer selection with the original audio distribution: `No` and `Nothing` each have weight 5; each remaining answer has weight 1.
 - A generated TypeScript actor through `@icp-sdk/bindgen` and the asset canister `ic_env` cookie.
 - Certified asset hosting configuration with raw access disabled.
+- Live top-three gainer/loser bubbles from ICP Tokens, fetched by a rate-limit-aware backend HTTPS outcall and cached for five minutes. The separate NAK promo also uses its live ICP Tokens change and logo.
 
 The question text is not written on-chain. The browser creates a unique 32-byte payment subaccount and stores only a SHA-256 question commitment in the ledger memo. The canister verifies the exact recipient, amount, memo, block, and replay status.
 
@@ -39,6 +40,8 @@ The deployment uses the `nak-staging` CLI identity as the sole controller. Both 
 The canonical public hostname is the current `icp.net` URL above. `https://dhk2q-zaaaa-aaaad-qmbzq-cai.icp0.io/` also serves the certified frontend, but the older `ic0.app` gateway rejects this canister with `client_domain_canister_mismatch`. Use `icp.net` for wallet testing and public links.
 
 OISY connections use the current standalone signer hosts: `https://staging.signer.oisy.com` for TESTICP staging and `https://signer.oisy.com` for production. The older `staging.oisy.com/sign` and `oisy.com/sign` routes are not used.
+
+Market bubbles use ICP Tokens' dedicated `/api/v2/gainers-losers` endpoint. Because ICP Tokens restricts browser CORS, the Motoko backend makes non-replicated HTTPS outcalls, caps response sizes, caches successful responses, and serves stale cached data if a refresh fails. This data is decorative and is never used for payment verification or answer selection.
 
 ## Windows without WSL
 

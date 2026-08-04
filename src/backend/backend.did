@@ -59,9 +59,37 @@ type AnswerReceipt = record {
   tokenSymbol : text;
 };
 
+type MarketPayload = record {
+  movers : text;
+  promo : text;
+};
+
+type MarketResult = variant {
+  err : text;
+  ok : MarketPayload;
+};
+
+type HttpHeader = record {
+  name : text;
+  value : text;
+};
+
+type HttpResponse = record {
+  status : nat;
+  headers : vec HttpHeader;
+  body : blob;
+};
+
+type TransformArgs = record {
+  context : blob;
+  response : HttpResponse;
+};
+
 service : {
   getConfig : () -> (ConfigResult);
+  getMarketMovers : () -> (MarketResult);
   getReceipt : (blockIndex : nat64) -> (opt ReceiptView) query;
   health : () -> (text) query;
   settlePayment : (request : SettleRequest) -> (SettleResult);
+  transformMarketResponse : (TransformArgs) -> (HttpResponse) query;
 };

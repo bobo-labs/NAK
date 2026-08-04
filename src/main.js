@@ -15,6 +15,8 @@ import { customDof } from './CustomDepthOfFieldNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { selectIcpTokenMovers } from './market/bubbles.js';
+import { getBackendContext } from './web3/backend.js';
 import { connectWallet, purchaseOracleAnswer } from './web3/oracle.js';
 
 // ============================================================================
@@ -1646,7 +1648,7 @@ function animate() {
   }
 }
 
-const fetchWithTimeout = (url, timeout = 3500) => {
+const fetchWithTimeout = (url, timeout = 3500, options = {}) => {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -1654,7 +1656,7 @@ const fetchWithTimeout = (url, timeout = 3500) => {
       reject(new Error('Request timed out'));
     }, timeout);
 
-    fetch(url, { signal: controller.signal })
+    fetch(url, { ...options, signal: controller.signal })
       .then(res => {
         clearTimeout(timer);
         resolve(res);
@@ -1670,121 +1672,37 @@ const fetchWithTimeout = (url, timeout = 3500) => {
 // 9. FLOATING BUBBLES WIDGET LOGIC
 // =============================================================================
 async function fetchTokenData() {
-  // 1. Try local Vite proxy first (bypasses client-side CORS during local dev/testing)
   try {
-    const response = await fetchWithTimeout('/api-icp/api/tokens', 3000);
-    if (!response.ok) throw new Error('Proxy response not ok');
-    const data = await response.json();
-    processIcpTokensData(data);
-    console.log('[Bubbles] Loaded tokens from icptokens.net (via local proxy):', tokenBubblesData);
-    if (isBenchmarkFinished) {
-      spawnBubbles();
-    }
-    return;
-  } catch (err) {
-    console.warn('[Bubbles] Local proxy failed, trying public CORS proxy:', err);
-  }
+    let moversPayload;
+    let promoPayload;
 
-  // 2. Try raw public CORS proxy as secondary fallback
-  try {
-    const response = await fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://icptokens.net/api/tokens'), 4000);
-    if (!response.ok) throw new Error('AllOrigins response not ok');
-    const data = await response.json();
-    processIcpTokensData(data);
-    console.log('[Bubbles] Loaded tokens from icptokens.net (via AllOrigins proxy):', tokenBubblesData);
-    if (isBenchmarkFinished) {
-      spawnBubbles();
-    }
-    return;
-  } catch (err) {
-    console.warn('[Bubbles] Public CORS proxy failed, trying GeckoTerminal fallback:', err);
-  }
-
-  // 3. Fall back to GeckoTerminal if icptokens.net is completely unreachable
-  try {
-    const response = await fetchWithTimeout('https://api.geckoterminal.com/api/v2/networks/icp/pools?page=1&include=base_token', 4000);
-    if (!response.ok) throw new Error('GeckoTerminal response not ok');
-    const data = await response.json();
-
-    const logoMap = {};
-    if (data.included) {
-      data.included.forEach(item => {
-        if (item.attributes && item.attributes.image_url) {
-          logoMap[item.id] = item.attributes.image_url;
-        }
-      });
-    }
-
-    const seenTokens = new Set();
-    const uniquePools = [];
-    data.data.forEach(pool => {
-      const baseTokenId = pool.relationships.base_token.data.id;
-      const baseSymbol = pool.attributes.name.split(' / ')[0].toUpperCase();
-      const change24h = pool.attributes.price_change_percentage.h24;
-
-      if (
-        !seenTokens.has(baseTokenId) &&
-        change24h !== null &&
-        change24h !== undefined &&
-        baseSymbol !== 'ICP' &&
-        baseSymbol !== 'USDT' &&
-        baseSymbol !== 'USDC' &&
-        baseSymbol !== 'CKUSDT' &&
-        baseSymbol !== 'CKUSDC'
-      ) {
-        seenTokens.add(baseTokenId);
-        uniquePools.push(pool);
+    if (import.meta.env.DEV) {
+      const [moversResponse, promoResponse] = await Promise.all([
+        fetchWithTimeout('/api-icp/api/v2/gainers-losers?limit=4', 6000),
+        fetchWithTimeout(`/api-icp/api/tokens/${bubble_promo.canisterId}`, 6000),
+      ]);
+      if (!moversResponse.ok || !promoResponse.ok) {
+        throw new Error('ICP Tokens local proxy returned an error');
       }
-    });
+      [moversPayload, promoPayload] = await Promise.all([
+        moversResponse.json(),
+        promoResponse.json(),
+      ]);
+    } else {
+      const { actor } = getBackendContext();
+      const result = await actor.getMarketMovers();
+      if ('err' in result) {
+        throw new Error(result.err);
+      }
+      moversPayload = JSON.parse(result.ok.movers);
+      promoPayload = JSON.parse(result.ok.promo);
+    }
 
-    const sorted = [...uniquePools].sort((a, b) => {
-      const aChange = parseFloat(a.attributes.price_change_percentage.h24) || 0;
-      const bChange = parseFloat(b.attributes.price_change_percentage.h24) || 0;
-      return bChange - aChange;
-    });
-
-    if (sorted.length < 6) throw new Error('Not enough unique tokens returned');
-
-    const gainers = sorted.slice(0, 3).map(pool => {
-      const baseTokenId = pool.relationships.base_token.data.id;
-      const symbol = pool.attributes.name.split(' / ')[0];
-      const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
-      const logo = logoMap[baseTokenId] || null;
-      return {
-        symbol,
-        logo,
-        change,
-        isGainer: true,
-        url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
-      };
-    });
-
-    const losers = sorted.slice(-3).map(pool => {
-      const baseTokenId = pool.relationships.base_token.data.id;
-      const symbol = pool.attributes.name.split(' / ')[0];
-      const change = parseFloat(pool.attributes.price_change_percentage.h24) || 0;
-      const logo = logoMap[baseTokenId] || null;
-      return {
-        symbol,
-        logo,
-        change,
-        isGainer: false,
-        url: `https://www.geckoterminal.com/icp/pools/${pool.attributes.address}`
-      };
-    });
-
-    tokenBubblesData = [...gainers, ...losers];
-    console.log('[Bubbles] Loaded tokens from GeckoTerminal:', tokenBubblesData);
+    processIcpTokensData(moversPayload, promoPayload);
+    console.log('[Bubbles] Loaded live movers from icptokens.net:', tokenBubblesData);
   } catch (err) {
-    console.warn('[Bubbles] Failed to fetch token data, using static fallbacks:', err);
-    tokenBubblesData = [
-      { symbol: 'NAK', logo: null, change: 24.5, isGainer: true },
-      { symbol: 'EXE', logo: null, change: 12.8, isGainer: true },
-      { symbol: 'CHAT', logo: null, change: 8.2, isGainer: true },
-      { symbol: 'GHOST', logo: null, change: -5.4, isGainer: false },
-      { symbol: 'OGY', logo: null, change: -8.9, isGainer: false },
-      { symbol: 'BOB', logo: null, change: -15.2, isGainer: false }
-    ];
+    console.warn('[Bubbles] ICP Tokens data is unavailable; hiding market movers:', err);
+    tokenBubblesData = [];
   } finally {
     if (isBenchmarkFinished) {
       spawnBubbles();
@@ -1792,57 +1710,16 @@ async function fetchTokenData() {
   }
 }
 
-function processIcpTokensData(data) {
-  // Filter valid tokens using loose comparison for numerical flags (1/0) from API
-  const validTokens = data.filter(token => {
-    return token.is_published == 1 &&
-      token.is_deprecated != 1 &&
-      token.metrics &&
-      token.metrics.change &&
-      token.metrics.change['24h'] &&
-      typeof token.metrics.change['24h'].usd === 'number' &&
-      token.logo &&
-      token.symbol;
-  });
-
-  // Filter out stablecoins or base coins to keep it to active ecosystem tokens
-  const filteredTokens = validTokens.filter(token => {
-    const sym = token.symbol.toUpperCase();
-    return sym !== 'ICP' && sym !== 'USDT' && sym !== 'USDC' && sym !== 'CKUSDT' && sym !== 'CKUSDC';
-  });
-
-  // Sort by 24h USD change descending
-  const sorted = [...filteredTokens].sort((a, b) => b.metrics.change['24h'].usd - a.metrics.change['24h'].usd);
-
-  if (sorted.length < 6) throw new Error('Not enough tokens');
-
-  const gainers = sorted.slice(0, 3).map(t => ({
-    symbol: t.symbol,
-    logo: `https://icptokens.net/storage/${t.logo}`,
-    change: t.metrics.change['24h'].usd,
-    isGainer: true,
-    url: `https://icptokens.net/token/${t.canister_id}`
-  }));
-
-  const losers = sorted.slice(-3).map(t => ({
-    symbol: t.symbol,
-    logo: `https://icptokens.net/storage/${t.logo}`,
-    change: t.metrics.change['24h'].usd,
-    isGainer: false,
-    url: `https://icptokens.net/token/${t.canister_id}`
-  }));
-
-  // Look for the promo token in the raw API data to get live stats
-  if (bubble_promo && bubble_promo.enabled) {
-    const foundPromo = data.find(t => t.canister_id === bubble_promo.canisterId);
-    if (foundPromo) {
-      bubble_promo.symbol = foundPromo.symbol;
-      bubble_promo.logo = `https://icptokens.net/storage/${foundPromo.logo}`;
-      bubble_promo.change = foundPromo.metrics?.change['24h']?.usd || 0;
-    }
+function processIcpTokensData(moversPayload, promoPayload) {
+  const { bubbles, promo } = selectIcpTokenMovers(
+    moversPayload,
+    promoPayload,
+    bubble_promo.canisterId,
+  );
+  tokenBubblesData = bubbles;
+  if (promo) {
+    Object.assign(bubble_promo, promo);
   }
-
-  tokenBubblesData = [...gainers, ...losers];
 }
 
 function spawnBubbles() {
@@ -1954,10 +1831,26 @@ function spawnBubbles() {
     // Token Logo
     const logo = document.createElement('img');
     logo.className = 'bubble-logo';
-    logo.src = token.logo ? token.logo : '/icon%2050x50/0001.webp';
-    logo.alt = token.symbol;
-    logo.onerror = () => {
+    const hideBubbleLogo = () => {
+      logo.removeAttribute('src');
+      logo.alt = '';
+      logo.style.visibility = 'hidden';
+    };
+    logo.alt = token.logo ? token.symbol : '';
+    if (token.logo) {
+      logo.src = token.logo;
+    } else if (token.isPromo) {
       logo.src = '/icon%2050x50/0001.webp';
+    } else {
+      hideBubbleLogo();
+    }
+    logo.onerror = () => {
+      logo.onerror = null;
+      if (token.isPromo) {
+        logo.src = '/icon%2050x50/0001.webp';
+      } else {
+        hideBubbleLogo();
+      }
     };
 
     // Percentage change
