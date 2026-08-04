@@ -6,7 +6,7 @@ Status: implementation is on `feature/icp-web3`. TESTICP staging was deployed on
 
 - OISY signer integration using the ICRC-21/25/27/29/49 flow.
 - A Plug adapter for the production ICP ledger. Plug is intentionally unavailable in TESTICP staging.
-- A Motoko oracle canister that verifies ledger payments through the official ICP index canister before requesting `raw_rand`.
+- A Motoko oracle canister that verifies the authoritative ledger block directly before requesting `raw_rand`, with the official index canister retained as a compatibility fallback.
 - Replay protection keyed by ledger block, a re-entrancy-safe `verified -> answering -> complete` receipt journal, and idempotent settlement retries.
 - On-chain answer selection with the original audio distribution: `No` and `Nothing` each have weight 5; each remaining answer has weight 1.
 - A generated TypeScript actor through `@icp-sdk/bindgen` and the asset canister `ic_env` cookie.
@@ -34,7 +34,9 @@ Both use 8 decimals, a 10,000 e8s ledger fee, and a 1,000,000 e8s (0.01 token) o
 
 Public URL: <https://dhk2q-zaaaa-aaaad-qmbzq-cai.icp.net/>
 
-The deployment uses the `nak-staging` CLI identity as the sole controller. Both canisters are running, their deployed configuration points to the official TESTICP ledger and index canisters, and desktop/mobile visual checks preserve the original composition. The canister mapping is committed at `.icp/data/mappings/staging.ids.json` so later upgrades target these same canisters.
+The deployment uses the `nak-staging` CLI identity as the sole controller. Both canisters are running, their deployed configuration points to the official TESTICP ledger and index canisters, and desktop/mobile checks load the GLB without texture errors. The asset policy explicitly permits the temporary `blob:` URLs used by Three.js for textures embedded in the GLB while keeping raw access disabled. The canister mapping is committed at `.icp/data/mappings/staging.ids.json` so later upgrades target these same canisters.
+
+The canonical public hostname is the current `icp.net` URL above. `https://dhk2q-zaaaa-aaaad-qmbzq-cai.icp0.io/` also serves the certified frontend, but the older `ic0.app` gateway rejects this canister with `client_domain_canister_mismatch`. Use `icp.net` for wallet testing and public links.
 
 ## Windows without WSL
 
@@ -82,13 +84,15 @@ Remove-Item Env:ICP_ENVIRONMENT
 
 ## Staging verification checklist
 
-Completed: canonical Linux build, named identity creation, cycle funding, staging deployment, canister status/config checks, and desktop/mobile visual checks.
+Completed: canonical Linux build, named identity creation, cycle funding, staging deployment, canister status/config checks, desktop/mobile GLB checks, all 12 MP3 decode/HTTP checks, and an on-chain TESTICP settlement.
+
+The settlement test transferred 0.01 TESTICP to a unique backend subaccount at ledger block `854005`. Direct ledger verification returned answer ID `4`; an idempotent retry returned the same answer, and a different claim against the block returned `blockAlreadyClaimed`. At test time the TESTICP index was more than 8,000 blocks behind the ledger, which is why direct ledger verification is the primary path.
 
 Remaining wallet flow:
 
 1. Obtain TESTICP in the OISY staging wallet and select IC testnet tokens in OISY.
 2. Open the deployed frontend and connect OISY.
-3. Select a question, approve one 0.01 TESTICP transfer, wait for index settlement, then pull the cord.
+3. Select a question, approve one 0.01 TESTICP transfer, wait for ledger verification, then pull the cord.
 4. Verify that refresh/retry returns the same answer for the same block and that a block cannot be claimed with a different commitment.
 
 Future staging upgrades use the committed IDs:
