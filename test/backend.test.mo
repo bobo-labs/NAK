@@ -58,6 +58,33 @@ assert Payment.findTransaction([transaction], 42) == ?transaction;
 assert Payment.findTransaction([transaction], 43) == null;
 assert Payment.verifyTransaction(request, config, "000f10ff", transaction) == null;
 
+let ledgerBlock : Ledger.CandidBlock = {
+  transaction = {
+    memo = 0;
+    icrc1_memo = ?commitment;
+    operation = ?#Transfer({
+      to = "\00\0f\10\ff";
+      fee = { e8s = 10_000 };
+      from = "sender";
+      amount = { e8s = 1_000_000 };
+      spender = null;
+    });
+    created_at_time = { timestamp_nanos = 1 };
+  };
+  timestamp = { timestamp_nanos = 1 };
+  parent_hash = null;
+};
+
+let blockResponse : Ledger.QueryBlocksResponse = {
+  blocks = [ledgerBlock];
+  first_block_index = 42;
+};
+
+assert Ledger.findLedgerBlock(blockResponse, 42) == ?ledgerBlock;
+assert Ledger.findLedgerBlock(blockResponse, 41) == null;
+assert Ledger.findLedgerBlock(blockResponse, 43) == null;
+assert Payment.verifyLedgerBlock(request, config, "\00\0f\10\ff", ledgerBlock) == null;
+
 let wrongAmount : Ledger.TransactionWithId = {
   transaction with
   transaction = {

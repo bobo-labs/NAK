@@ -15,6 +15,11 @@ mixin (
   receipts : Map.Map<Nat64, Types.Receipt>,
   oraclePrincipal : Principal,
 ) {
+  type PaymentEvidence = {
+    #direct : Ledger.CandidBlock;
+    #indexed : Ledger.TransactionWithId;
+  };
+
   func sameClaim(receipt : Types.Receipt, request : Types.SettleRequest) : Bool {
     Blob.equal(receipt.paymentId, request.paymentId) and
     Blob.equal(receipt.questionCommitment, request.questionCommitment) and
@@ -102,31 +107,46 @@ mixin (
       subaccount = ?request.paymentId;
     };
 
+    let ledger = Ledger.ledger(config.ledgerCanisterId);
     let expectedAccountIdentifier = try {
-      let bytes = await Ledger.ledger(config.ledgerCanisterId).account_identifier(account);
-      Ledger.accountIdentifierText(bytes);
+      await ledger.account_identifier(account);
     } catch (error) {
       return #err(#upstream("Ledger lookup failed: " # error.message()));
     };
 
-    let response = try {
-      await Ledger.index(config.indexCanisterId).get_account_transactions({
-        account;
-        start = null;
-        max_results = 5;
+    var evidence : ?PaymentEvidence = try {
+      let response = await ledger.query_blocks({
+        start = request.blockIndex;
+        length = 1;
       });
-    } catch (error) {
-      return #err(#upstream("Index lookup failed: " # error.message()));
+      switch (Ledger.findLedgerBlock(response, request.blockIndex)) {
+        case (?block) { ?#direct(block) };
+        case null { null };
+      };
+    } catch (_) {
+      null;
     };
 
-    let transactions = switch (response) {
-      case (#Ok(value)) { value.transactions };
-      case (#Err(error)) { return #err(#upstream("Index error: " # error.message)) };
-    };
+    if (evidence == null) {
+      let response = try {
+        await Ledger.index(config.indexCanisterId).get_account_transactions({
+          account;
+          start = null;
+          max_results = 5;
+        });
+      } catch (error) {
+        return #err(#upstream("Index lookup failed: " # error.message()));
+      };
 
-    let entry = switch (Payment.findTransaction(transactions, request.blockIndex)) {
-      case (?value) { value };
-      case null { return #err(#paymentNotIndexed) };
+      let transactions = switch (response) {
+        case (#Ok(value)) { value.transactions };
+        case (#Err(error)) { return #err(#upstream("Index error: " # error.message)) };
+      };
+
+      evidence := switch (Payment.findTransaction(transactions, request.blockIndex)) {
+        case (?entry) { ?#indexed(entry) };
+        case null { return #err(#paymentNotIndexed) };
+      };
     };
 
     // Inter-canister calls above are re-entrancy points. Re-check before journaling.
@@ -144,7 +164,22 @@ mixin (
       case null {};
     };
 
-    switch (Payment.verifyTransaction(request, config, expectedAccountIdentifier, entry)) {
+    let paymentError = switch (evidence) {
+      case (?#direct(block)) {
+        Payment.verifyLedgerBlock(request, config, expectedAccountIdentifier, block);
+      };
+      case (?#indexed(entry)) {
+        Payment.verifyTransaction(
+          request,
+          config,
+          Ledger.accountIdentifierText(expectedAccountIdentifier),
+          entry,
+        );
+      };
+      case null { ?#paymentNotIndexed };
+    };
+
+    switch (paymentError) {
       case (?error) { return #err(error) };
       case null {};
     };

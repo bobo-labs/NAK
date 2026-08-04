@@ -1,4 +1,5 @@
 import Principal "mo:core/Principal";
+import Nat64 "mo:core/Nat64";
 import Nat8 "mo:core/Nat8";
 
 module {
@@ -45,6 +46,45 @@ module {
 
   public type TransactionWithId = { id : Nat64; transaction : Transaction };
 
+  public type CandidOperation = {
+    #Approve : {
+      fee : Tokens;
+      from : Blob;
+      allowance_e8s : Int;
+      allowance : Tokens;
+      expected_allowance : ?Tokens;
+      expires_at : ?Timestamp;
+      spender : Blob;
+    };
+    #Burn : { from : Blob; amount : Tokens; spender : ?Blob };
+    #Mint : { to : Blob; amount : Tokens };
+    #Transfer : {
+      to : Blob;
+      fee : Tokens;
+      from : Blob;
+      amount : Tokens;
+      spender : ?Blob;
+    };
+  };
+
+  public type CandidTransaction = {
+    memo : Nat64;
+    icrc1_memo : ?Blob;
+    operation : ?CandidOperation;
+    created_at_time : Timestamp;
+  };
+
+  public type CandidBlock = {
+    transaction : CandidTransaction;
+    timestamp : Timestamp;
+    parent_hash : ?Blob;
+  };
+
+  public type QueryBlocksResponse = {
+    blocks : [CandidBlock];
+    first_block_index : Nat64;
+  };
+
   public type TransactionsResponse = {
     balance : Nat64;
     transactions : [TransactionWithId];
@@ -66,6 +106,7 @@ module {
 
   public type Ledger = actor {
     account_identifier : shared query Account -> async Blob;
+    query_blocks : shared query ({ start : Nat64; length : Nat64 }) -> async QueryBlocksResponse;
   };
 
   public func index(canisterId : Principal) : Index {
@@ -83,5 +124,21 @@ module {
       result #= hexDigits[number / 16] # hexDigits[number % 16];
     };
     result;
+  };
+
+  public func findLedgerBlock(
+    response : QueryBlocksResponse,
+    blockIndex : Nat64,
+  ) : ?CandidBlock {
+    if (blockIndex < response.first_block_index) {
+      return null;
+    };
+
+    let offset = Nat64.toNat(blockIndex - response.first_block_index);
+    if (offset >= response.blocks.size()) {
+      null
+    } else {
+      ?response.blocks[offset]
+    };
   };
 };

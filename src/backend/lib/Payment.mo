@@ -5,6 +5,34 @@ import Ledger "Ledger";
 import Types "../types";
 
 module {
+  func verifyTransferFields(
+    request : Types.SettleRequest,
+    config : Types.TokenConfig,
+    recipientMatches : Bool,
+    amount : Nat64,
+    icrc1Memo : ?Blob,
+    legacyMemo : Nat64,
+  ) : ?Types.SettleError {
+    if (not recipientMatches) {
+      return ?#recipientMismatch;
+    };
+    if (amount != config.amount) {
+      return ?#amountMismatch({
+        expected = config.amount;
+        received = amount;
+      });
+    };
+
+    let memoMatches = switch (icrc1Memo) {
+      case (?memo) { Blob.equal(memo, request.questionCommitment) };
+      case null { legacyMemo == request.legacyMemo };
+    };
+    if (not memoMatches) {
+      return ?#memoMismatch;
+    };
+    null;
+  };
+
   public func validateRequest(request : Types.SettleRequest) : ?Types.SettleError {
     if (request.paymentId.size() != 32) {
       ?#invalidInput("paymentId must be exactly 32 bytes")
@@ -35,24 +63,35 @@ module {
   ) : ?Types.SettleError {
     switch (entry.transaction.operation) {
       case (#Transfer(transfer)) {
-        if (not transfer.to.equal(expectedAccountIdentifier)) {
-          return ?#recipientMismatch;
-        };
-        if (transfer.amount.e8s != config.amount) {
-          return ?#amountMismatch({
-            expected = config.amount;
-            received = transfer.amount.e8s;
-          });
-        };
+        verifyTransferFields(
+          request,
+          config,
+          transfer.to.equal(expectedAccountIdentifier),
+          transfer.amount.e8s,
+          entry.transaction.icrc1_memo,
+          entry.transaction.memo,
+        );
+      };
+      case (_) { ?#recipientMismatch };
+    };
+  };
 
-        let memoMatches = switch (entry.transaction.icrc1_memo) {
-          case (?memo) { Blob.equal(memo, request.questionCommitment) };
-          case null { entry.transaction.memo == request.legacyMemo };
-        };
-        if (not memoMatches) {
-          return ?#memoMismatch;
-        };
-        null;
+  public func verifyLedgerBlock(
+    request : Types.SettleRequest,
+    config : Types.TokenConfig,
+    expectedAccountIdentifier : Blob,
+    block : Ledger.CandidBlock,
+  ) : ?Types.SettleError {
+    switch (block.transaction.operation) {
+      case (?#Transfer(transfer)) {
+        verifyTransferFields(
+          request,
+          config,
+          Blob.equal(transfer.to, expectedAccountIdentifier),
+          transfer.amount.e8s,
+          block.transaction.icrc1_memo,
+          block.transaction.memo,
+        );
       };
       case (_) { ?#recipientMismatch };
     };
