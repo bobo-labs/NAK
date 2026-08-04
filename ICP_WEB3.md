@@ -38,6 +38,8 @@ The deployment uses the `nak-staging` CLI identity as the sole controller. Both 
 
 The canonical public hostname is the current `icp.net` URL above. `https://dhk2q-zaaaa-aaaad-qmbzq-cai.icp0.io/` also serves the certified frontend, but the older `ic0.app` gateway rejects this canister with `client_domain_canister_mismatch`. Use `icp.net` for wallet testing and public links.
 
+OISY connections use the current standalone signer hosts: `https://staging.signer.oisy.com` for TESTICP staging and `https://signer.oisy.com` for production. The older `staging.oisy.com/sign` and `oisy.com/sign` routes are not used.
+
 ## Windows without WSL
 
 The website and its deployed ICP integration work in a normal browser on Windows. Native Windows can run:

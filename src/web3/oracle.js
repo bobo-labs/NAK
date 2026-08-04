@@ -5,8 +5,8 @@ import { PlugWalletAdapter } from './wallets/plug.js';
 
 const IC_HOST = 'https://icp-api.io';
 const OISY_SIGNERS = {
-  staging: 'https://staging.oisy.com/sign',
-  production: 'https://oisy.com/sign',
+  staging: 'https://staging.signer.oisy.com',
+  production: 'https://signer.oisy.com',
 };
 
 let activeAdapter;
