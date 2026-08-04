@@ -32,7 +32,7 @@ actor Oracle {
     fetchedAt : Int;
   };
 
-  let marketCacheTtlNanos = 5 * 60 * 1_000_000_000;
+  let marketCacheTtlNanos = 60 * 60 * 1_000_000_000;
   let receipts = Map.empty<Nat64, Types.Receipt>();
   var marketCache : ?MarketCache = null;
   transient var marketRequestInFlight = false;
@@ -114,11 +114,11 @@ actor Oracle {
     try {
       let movers = await fetchJson(
         "https://icptokens.net/api/v2/gainers-losers?limit=4",
-        12_000,
+        6_000,
       );
       let promo = await fetchJson(
         "https://icptokens.net/api/tokens/eig2s-waaaa-aaaam-qbg5a-cai",
-        24_000,
+        12_000,
       );
       let fetchedAt = Time.now();
       marketCache := ?{ movers; promo; fetchedAt };

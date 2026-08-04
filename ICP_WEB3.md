@@ -11,7 +11,7 @@ Status: implementation is on `feature/icp-web3`. TESTICP staging was deployed on
 - On-chain answer selection with the original audio distribution: `No` and `Nothing` each have weight 5; each remaining answer has weight 1.
 - A generated TypeScript actor through `@icp-sdk/bindgen` and the asset canister `ic_env` cookie.
 - Certified asset hosting configuration with raw access disabled.
-- Live top-three gainer/loser bubbles from ICP Tokens, fetched by a rate-limit-aware backend HTTPS outcall and cached for five minutes. The separate NAK promo also uses its live ICP Tokens change and logo.
+- Live top-three gainer/loser bubbles from ICP Tokens, fetched by a rate-limit-aware backend HTTPS outcall and cached for one hour. The separate NAK promo also uses its live ICP Tokens change and logo.
 
 The question text is not written on-chain. The browser creates a unique 32-byte payment subaccount and stores only a SHA-256 question commitment in the ledger memo. The canister verifies the exact recipient, amount, memo, block, and replay status.
 
@@ -41,7 +41,7 @@ The canonical public hostname is the current `icp.net` URL above. `https://dhk2q
 
 OISY connections use the current standalone signer hosts: `https://staging.signer.oisy.com` for TESTICP staging and `https://signer.oisy.com` for production. The older `staging.oisy.com/sign` and `oisy.com/sign` routes are not used.
 
-Market bubbles use ICP Tokens' dedicated `/api/v2/gainers-losers` endpoint. Because ICP Tokens restricts browser CORS, the Motoko backend makes non-replicated HTTPS outcalls, caps response sizes, caches successful responses, and serves stale cached data if a refresh fails. Normal page loads use a query call; only the first request after the five-minute expiry performs the cycles-consuming refresh. This data is decorative and is never used for payment verification or answer selection.
+Market bubbles use ICP Tokens' dedicated `/api/v2/gainers-losers` endpoint. Because ICP Tokens restricts browser CORS, the Motoko backend makes non-replicated HTTPS outcalls, caps response sizes, caches successful responses, and serves stale cached data if a refresh fails. Normal page loads use a query call; only the first request after the one-hour expiry performs the cycles-consuming refresh. This data is decorative and is never used for payment verification or answer selection.
 
 ## Windows without WSL
 
