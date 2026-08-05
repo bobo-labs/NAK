@@ -11,3 +11,10 @@ test('OISY uses the current standalone signer domains', async () => {
   assert.match(source, /production:\s*'https:\/\/signer\.oisy\.com'/);
   assert.doesNotMatch(source, /https:\/\/(?:staging\.)?oisy\.com\/sign/);
 });
+
+test('wallet orchestration exposes an explicit disconnect operation', async () => {
+  const source = await readFile(oracleUrl, 'utf8');
+
+  assert.match(source, /export async function disconnectWallet\(\)/);
+  assert.match(source, /activeConnection = undefined/);
+});

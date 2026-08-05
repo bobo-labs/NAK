@@ -1,0 +1,13 @@
+.wallet-option-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+
+.wallet-disconnect-btn {
+  background: #ff8ca3;
+}
+
+.wallet-disconnect-btn:hover {
+  background: #ffadb8;
+}

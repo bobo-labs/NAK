@@ -80,23 +80,37 @@ export async function connectWallet(type, onDisconnect) {
     throw new Error('Use OISY for TESTICP staging. Plug is enabled for the production ICP ledger.');
   }
 
-  if (activeAdapter) {
-    await activeAdapter.disconnect();
-  }
+  await disconnectWallet();
 
   const adapter = type === 'oisy' ? new OisyWalletAdapter() : new PlugWalletAdapter();
-  const connection = await adapter.connect({
-    signerUrl: OISY_SIGNERS[config.network] ?? OISY_SIGNERS.staging,
-    host: IC_HOST,
-    ledgerCanisterId: config.ledgerCanisterId,
-    backendCanisterId: canisterId,
-    onDisconnect,
-  });
+  let connection;
+  try {
+    connection = await adapter.connect({
+      signerUrl: OISY_SIGNERS[config.network] ?? OISY_SIGNERS.staging,
+      host: IC_HOST,
+      ledgerCanisterId: config.ledgerCanisterId,
+      backendCanisterId: canisterId,
+      onDisconnect,
+    });
+  } catch (error) {
+    await adapter.disconnect();
+    throw error;
+  }
 
   activeAdapter = adapter;
   activeConfig = config;
   activeConnection = connection;
   return { ...connection, config };
+}
+
+export async function disconnectWallet() {
+  const adapter = activeAdapter;
+  activeAdapter = undefined;
+  activeConfig = undefined;
+  activeConnection = undefined;
+  if (adapter) {
+    await adapter.disconnect();
+  }
 }
 
 export async function purchaseOracleAnswer(question) {

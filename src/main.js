@@ -17,7 +17,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { selectIcpTokenMovers } from './market/bubbles.js';
 import { getBackendContext } from './web3/backend.js';
-import { connectWallet, purchaseOracleAnswer } from './web3/oracle.js';
+import { connectWallet, disconnectWallet, purchaseOracleAnswer } from './web3/oracle.js';
 
 // ============================================================================
 // TWEAKABLE CONFIGURATION & QUALITY TIERS
@@ -124,7 +124,9 @@ const topHudBar = document.querySelector('#top-hud-bar');
 const walletConnectWrapper = document.querySelector('.wallet-connect-wrapper');
 const walletConnectBtn = document.querySelector('#wallet-connect-btn');
 const walletDropdown = document.querySelector('#wallet-dropdown');
-const walletOptionBtns = document.querySelectorAll('.wallet-option-btn');
+const walletDropdownHeader = document.querySelector('.wallet-dropdown-header');
+const walletConnectOptionBtns = document.querySelectorAll('.wallet-option-btn[data-wallet]');
+const walletDisconnectBtn = document.querySelector('#wallet-disconnect-btn');
 
 // Yellow card UI
 const askConchOverlay = document.querySelector('#ask-conch-overlay');
@@ -599,20 +601,25 @@ async function init() {
     walletConnectBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       walletDropdown.classList.toggle('hidden');
+      walletConnectBtn.setAttribute('aria-expanded', String(!walletDropdown.classList.contains('hidden')));
     });
   }
 
   document.addEventListener('click', () => {
-    if (walletDropdown) walletDropdown.classList.add('hidden');
+    closeWalletDropdown();
   });
 
   // Connect real wallet options. The signer handles permissions and consent.
-  walletOptionBtns.forEach(optionBtn => {
+  walletConnectOptionBtns.forEach(optionBtn => {
     optionBtn.addEventListener('click', async () => {
       const walletType = optionBtn.getAttribute('data-wallet');
       await handleWalletConnection(walletType);
     });
   });
+
+  if (walletDisconnectBtn) {
+    walletDisconnectBtn.addEventListener('click', handleWalletDisconnection);
+  }
 
   // Payment is enabled only after both wallet connection and question selection.
   questionRadioBtns.forEach(radio => {
@@ -1133,6 +1140,22 @@ function configureWalletModal(walletType, config) {
   if (walletModalRecipient) walletModalRecipient.textContent = 'Unique oracle canister subaccount';
 }
 
+function closeWalletDropdown() {
+  if (walletDropdown) walletDropdown.classList.add('hidden');
+  if (walletConnectBtn) walletConnectBtn.setAttribute('aria-expanded', 'false');
+}
+
+function updateWalletMenu() {
+  if (walletDropdownHeader) {
+    walletDropdownHeader.textContent = isWalletConnected ? 'Wallet Connected' : 'Wallet Connect';
+  }
+  walletConnectOptionBtns.forEach(button => button.classList.toggle('hidden', isWalletConnected));
+  if (walletDisconnectBtn) {
+    walletDisconnectBtn.classList.toggle('hidden', !isWalletConnected);
+    walletDisconnectBtn.disabled = isWalletConnecting || isPaymentPending;
+  }
+}
+
 function onWalletDisconnected() {
   isWalletConnected = false;
   connectedWalletType = '';
@@ -1141,13 +1164,15 @@ function onWalletDisconnected() {
     walletConnectBtn.textContent = 'Connect Wallet';
     walletConnectBtn.style.background = '';
   }
+  closeWalletDropdown();
+  updateWalletMenu();
   updateBurnAvailability();
 }
 
 async function handleWalletConnection(walletType) {
   if (!walletType || isWalletConnecting || isPaymentPending) return;
   isWalletConnecting = true;
-  if (walletDropdown) walletDropdown.classList.add('hidden');
+  closeWalletDropdown();
   if (walletConnectBtn) walletConnectBtn.textContent = 'Connecting...';
 
   try {
@@ -1159,6 +1184,7 @@ async function handleWalletConnection(walletType) {
       walletConnectBtn.textContent = `[ ${shortPrincipal(connection.principal)} | ${connection.config.tokenSymbol} ]`;
       walletConnectBtn.style.background = '#ffd635';
     }
+    updateWalletMenu();
   } catch (error) {
     onWalletDisconnected();
     configureWalletModal(walletType, null);
@@ -1169,7 +1195,24 @@ async function handleWalletConnection(walletType) {
     });
   } finally {
     isWalletConnecting = false;
+    updateWalletMenu();
     updateBurnAvailability();
+  }
+}
+
+async function handleWalletDisconnection() {
+  if (!isWalletConnected || isWalletConnecting || isPaymentPending) return;
+  isWalletConnecting = true;
+  closeWalletDropdown();
+  updateWalletMenu();
+
+  try {
+    await disconnectWallet();
+  } catch (error) {
+    console.warn('Wallet disconnect cleanup failed:', error);
+  } finally {
+    isWalletConnecting = false;
+    onWalletDisconnected();
   }
 }
 

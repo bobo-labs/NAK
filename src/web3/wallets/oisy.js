@@ -18,57 +18,138 @@ export function buildOisyTransferParams({ recipientOwner, paymentId, amount, mem
 
 export class OisyWalletAdapter {
   #account;
+  #connectSigner;
+  #dismissDisconnect;
+  #signerOptions;
   #wallet;
 
-  async connect({ signerUrl, host, onDisconnect }) {
-    this.#wallet = await IcrcWallet.connect({
+  constructor({ connectSigner = options => IcrcWallet.connect(options) } = {}) {
+    this.#connectSigner = connectSigner;
+  }
+
+  async #closeSigner() {
+    this.#dismissDisconnect?.();
+    this.#dismissDisconnect = undefined;
+    const wallet = this.#wallet;
+    this.#wallet = undefined;
+    if (wallet) {
+      try {
+        await wallet.disconnect();
+      } catch (error) {
+        console.warn('OISY signer cleanup failed:', error);
+      }
+    }
+  }
+
+  async #openSigner() {
+    if (!this.#signerOptions) {
+      throw new Error('Connect OISY before making a payment.');
+    }
+
+    let wallet;
+    let rejectDisconnected;
+    let sessionActive = true;
+    const disconnected = new Promise((_, reject) => {
+      rejectDisconnected = reject;
+    });
+    // A close can happen between account discovery and the transfer race.
+    // Attach a handler immediately while preserving the rejected promise.
+    disconnected.catch(() => {});
+    this.#dismissDisconnect = () => {
+      sessionActive = false;
+    };
+
+    try {
+      wallet = await this.#connectSigner({
+        ...this.#signerOptions,
+        onDisconnect: () => {
+          if (this.#wallet === wallet) {
+            this.#wallet = undefined;
+          }
+          if (sessionActive) {
+            sessionActive = false;
+            rejectDisconnected(new Error('OISY approval was closed. No payment was sent; your wallet remains linked.'));
+          }
+        },
+      });
+      this.#wallet = wallet;
+
+      const { allPermissionsGranted } = await Promise.race([
+        wallet.requestPermissionsNotGranted(),
+        disconnected,
+      ]);
+      if (!allPermissionsGranted) {
+        throw new Error('OISY permissions are required to make the oracle payment.');
+      }
+
+      const accounts = await Promise.race([wallet.accounts(), disconnected]);
+      const account = accounts[0];
+      if (!account) {
+        throw new Error('OISY did not return an ICP account.');
+      }
+
+      return { account, disconnected, wallet };
+    } catch (error) {
+      await this.#closeSigner();
+      throw error;
+    }
+  }
+
+  async connect({ signerUrl, host }) {
+    await this.disconnect();
+    this.#signerOptions = {
       url: signerUrl,
       host,
       windowOptions: { width: 576, height: 625, position: 'center' },
       connectionOptions: { timeoutInMilliseconds: 120_000 },
-      onDisconnect,
-    });
+    };
 
-    const { allPermissionsGranted } = await this.#wallet.requestPermissionsNotGranted();
-    if (!allPermissionsGranted) {
-      await this.disconnect();
-      throw new Error('OISY permissions are required to make the oracle payment.');
+    try {
+      const { account } = await this.#openSigner();
+      this.#account = account;
+      return { principal: account.owner, type: 'oisy' };
+    } catch (error) {
+      this.#account = undefined;
+      this.#signerOptions = undefined;
+      throw error;
+    } finally {
+      await this.#closeSigner();
     }
-
-    const accounts = await this.#wallet.accounts();
-    this.#account = accounts[0];
-    if (!this.#account) {
-      await this.disconnect();
-      throw new Error('OISY did not return an ICP account.');
-    }
-
-    return { principal: this.#account.owner, type: 'oisy' };
   }
 
   async transfer({ ledgerCanisterId, recipientOwner, paymentId, amount, memo, createdAtTime }) {
-    if (!this.#wallet || !this.#account) {
+    if (!this.#account || !this.#signerOptions) {
       throw new Error('Connect OISY before making a payment.');
     }
 
-    return this.#wallet.transfer({
-      owner: this.#account.owner,
-      ledgerCanisterId,
-      params: buildOisyTransferParams({
-        recipientOwner,
-        paymentId,
-        amount,
-        memo,
-        createdAtTime,
-      }),
-    });
+    try {
+      const { account, disconnected, wallet } = await this.#openSigner();
+      if (account.owner !== this.#account.owner) {
+        throw new Error('OISY opened a different account. Disconnect it and link the intended account.');
+      }
+
+      return await Promise.race([
+        wallet.transfer({
+          owner: account.owner,
+          ledgerCanisterId,
+          params: buildOisyTransferParams({
+            recipientOwner,
+            paymentId,
+            amount,
+            memo,
+            createdAtTime,
+          }),
+        }),
+        disconnected,
+      ]);
+    } finally {
+      await this.#closeSigner();
+    }
   }
 
   async disconnect() {
-    const wallet = this.#wallet;
-    this.#wallet = undefined;
     this.#account = undefined;
-    if (wallet) {
-      await wallet.disconnect();
-    }
+    this.#signerOptions = undefined;
+    await this.#closeSigner();
   }
 }

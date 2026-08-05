@@ -11,6 +11,7 @@
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fredoka:wght@400;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/wallet.css">
 </head>
 
 <body>
@@ -32,7 +33,7 @@
       <!-- Top HUD Banner with Wallet Connect -->
       <div id="top-hud-bar" class="top-hud-bar hidden">
         <div class="wallet-connect-wrapper">
-          <button id="wallet-connect-btn" class="wallet-connect-btn">Connect Wallet</button>
+          <button id="wallet-connect-btn" class="wallet-connect-btn" aria-haspopup="true" aria-expanded="false">Connect Wallet</button>
           <div id="wallet-dropdown" class="wallet-dropdown hidden">
             <div class="wallet-dropdown-header">Wallet Connect</div>
             <div class="wallet-options">
@@ -43,6 +44,10 @@
               <button class="wallet-option-btn" data-wallet="plug">
                 <span class="wallet-icon-emoji">🔌</span>
                 <span class="wallet-name">[ Plug Wallet ]</span>
+              </button>
+              <button id="wallet-disconnect-btn" class="wallet-option-btn wallet-disconnect-btn hidden" type="button">
+                <span class="wallet-icon-emoji" aria-hidden="true">&#9211;</span>
+                <span class="wallet-name">[ Disconnect Wallet ]</span>
               </button>
             </div>
           </div>
