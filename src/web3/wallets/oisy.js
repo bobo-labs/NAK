@@ -1,6 +1,21 @@
 import { IcrcWallet } from '@dfinity/oisy-wallet-signer/icrc-wallet';
 import { Principal } from '@icp-sdk/core/principal';
 
+export function buildOisyTransferParams({ recipientOwner, paymentId, amount, memo, createdAtTime }) {
+  return {
+    to: {
+      owner: Principal.fromText(recipientOwner),
+      // The generated ICRC Candid type represents an optional subaccount as
+      // [] | [Uint8Array]. Passing the byte array directly is encoded as a
+      // record with numeric keys by the signer and is rejected before sending.
+      subaccount: [paymentId],
+    },
+    amount,
+    memo,
+    created_at_time: createdAtTime,
+  };
+}
+
 export class OisyWalletAdapter {
   #account;
   #wallet;
@@ -38,15 +53,13 @@ export class OisyWalletAdapter {
     return this.#wallet.transfer({
       owner: this.#account.owner,
       ledgerCanisterId,
-      params: {
-        to: {
-          owner: Principal.fromText(recipientOwner),
-          subaccount: paymentId,
-        },
+      params: buildOisyTransferParams({
+        recipientOwner,
+        paymentId,
         amount,
         memo,
-        created_at_time: createdAtTime,
-      },
+        createdAtTime,
+      }),
     });
   }
 
